@@ -18,16 +18,19 @@ export default function MissionsPage() {
     async function loadMissions() {
       if (!student) return;
       try {
-        const allMissions = await dbService.getMissions();
+        const [allMissions, progress, allLessons, allChallenges] = await Promise.all([
+          dbService.getMissions(),
+          dbService.getStudentProgress(student.id),
+          dbService.getLessons(),
+          dbService.getChallenges()
+        ]);
         setMissions(allMissions);
 
-        // Calculate progress for each mission
-        const progress = await dbService.getStudentProgress(student.id);
         const map: Record<string, { completed: number; total: number; pct: number }> = {};
 
         for (const m of allMissions) {
-          const lessons = await dbService.getLessons(m.id);
-          const challenges = await dbService.getChallenges(m.id);
+          const lessons = allLessons.filter((l: any) => l.mission_id === m.id);
+          const challenges = allChallenges.filter((c: any) => c.mission_id === m.id);
           const totalItems = lessons.length + challenges.length;
           
           if (totalItems === 0) {

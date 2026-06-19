@@ -39,7 +39,7 @@ export default function Sidebar() {
   const studentLinks = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Missions Path', href: '/missions', icon: Map },
-    { name: 'Code Games', href: '/games', icon: Gamepad2 },
+    { name: 'Logic', href: '/games', icon: Gamepad2 },
     { name: 'Code Lab', href: '/code-lab', icon: Code2 },
     { name: 'Robotics Lab', href: '/robotics-lab', icon: Cpu },
     { name: 'Community', href: '/community', icon: Users },

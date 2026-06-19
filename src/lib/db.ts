@@ -1717,13 +1717,20 @@ export const dbService = {
     }
   },
 
-  async getComments(postId: string) {
+  async getComments(postId?: string) {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('comments').select('*, students(*, profiles(*))').eq('post_id', postId).eq('status', 'approved');
+      let query = supabase.from('comments').select('*, students(*, profiles(*))').eq('status', 'approved');
+      if (postId) query = query.eq('post_id', postId);
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     } else {
-      const comments = localDB.comments.filter((c: any) => c.post_id === postId && c.status === 'approved');
+      let comments = localDB.comments;
+      if (postId) {
+        comments = comments.filter((c: any) => c.post_id === postId && c.status === 'approved');
+      } else {
+        comments = comments.filter((c: any) => c.status === 'approved');
+      }
       const students = localDB.students;
       const profiles = localDB.profiles;
 
@@ -1836,18 +1843,31 @@ export const dbService = {
     }
   },
 
-  async getStudentBadges(studentId: string) {
+  async getStudentBadges(studentId?: string) {
     if (isSupabaseConfigured && supabase) {
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!studentId || !uuidRegex.test(studentId)) return [];
-
-      const { data, error } = await supabase.from('student_badges').select('*, badges(*)').eq('student_id', studentId);
-      if (error) throw error;
-      return data.map((sb: any) => sb.badges);
+      if (studentId) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(studentId)) return [];
+        const { data, error } = await supabase.from('student_badges').select('*, badges(*)').eq('student_id', studentId);
+        if (error) throw error;
+        return data.map((sb: any) => sb.badges);
+      } else {
+        const { data, error } = await supabase.from('student_badges').select('*, badges(*)');
+        if (error) throw error;
+        return data;
+      }
     } else {
-      const studentBadges = localDB.studentBadges.filter((sb: any) => sb.student_id === studentId);
-      const badges = localDB.badges;
-      return studentBadges.map((sb: any) => badges.find((b: any) => b.id === sb.badge_id)).filter(Boolean);
+      if (studentId) {
+        const studentBadges = localDB.studentBadges.filter((sb: any) => sb.student_id === studentId);
+        const badges = localDB.badges;
+        return studentBadges.map((sb: any) => badges.find((b: any) => b.id === sb.badge_id)).filter(Boolean);
+      } else {
+        const badges = localDB.badges;
+        return localDB.studentBadges.map((sb: any) => ({
+          ...sb,
+          badges: badges.find((b: any) => b.id === sb.badge_id)
+        })).filter((sb: any) => sb.badges);
+      }
     }
   },
 

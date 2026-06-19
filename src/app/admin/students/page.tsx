@@ -38,17 +38,22 @@ export default function StudentsManagement() {
 
   async function loadData() {
     try {
-      const allStudents = await dbService.getStudents();
+      const [allStudents, badges, allStudentBadges] = await Promise.all([
+        dbService.getStudents(),
+        dbService.getBadges(),
+        dbService.getStudentBadges()
+      ]);
       setStudents(allStudents);
-
-      const badges = await dbService.getBadges();
       setBadgesList(badges);
 
       // Load badges for each student
       const map: Record<string, any[]> = {};
       for (const s of allStudents) {
-        const list = await dbService.getStudentBadges(s.students.id);
-        map[s.students.id] = list;
+        const sId = s.students.id;
+        const list = allStudentBadges
+          .filter((sb: any) => sb.student_id === sId)
+          .map((sb: any) => sb.badges);
+        map[sId] = list;
       }
       setStudentBadgesMap(map);
     } catch (err) {

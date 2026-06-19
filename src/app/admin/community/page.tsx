@@ -14,17 +14,20 @@ export default function AdminCommunityModeration() {
 
   async function loadForumData() {
     try {
-      const allPosts = await dbService.getPosts();
+      const [allPosts, allComments] = await Promise.all([
+        dbService.getPosts(),
+        dbService.getComments()
+      ]);
       setPosts(allPosts);
 
-      // Load all comments from the db for moderation
-      // We can fetch approved ones and show options to hide
-      const commList: any[] = [];
-      const approvedPosts = allPosts.filter((p: any) => p.status === 'approved');
-      for (const p of approvedPosts) {
-        const list = await dbService.getComments(p.id);
-        commList.push(...list.map((c: any) => ({ ...c, postTitle: p.title })));
-      }
+      // Load all comments from memory
+      const commList = allComments.map((c: any) => {
+        const post = allPosts.find((p: any) => p.id === c.post_id);
+        return {
+          ...c,
+          postTitle: post ? post.title : 'Deleted Post'
+        };
+      });
       setComments(commList);
     } catch (err) {
       console.error(err);

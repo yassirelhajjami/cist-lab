@@ -134,42 +134,56 @@ export default function MissionDetailPage() {
     setIsRunning(true);
     setTerminalLogs(prev => [...prev, '> Running check test...']);
     
-    // Simulating Python interpretation console
+    // Simulating Python interpretation console dynamically
     setTimeout(() => {
       setIsRunning(false);
       
       const cleanCode = code.trim();
       const expected = activeChallenge.expected_output.trim();
 
-      // Simple Python print simulator logic
-      // e.g. print("Hello CIST CodeQuest!") -> extract content inside double/single quotes
-      let stdout = '';
-      const printRegex = /print\s*\(\s*["']([^"']*)["']\s*\)/g;
-      const match = printRegex.exec(cleanCode);
+      const lines = cleanCode.split('\n');
+      const variables: Record<string, string> = {};
+      const outputLines: string[] = [];
 
-      // Simple variable check template swapper simulator
-      // school_city = "Tangier"; print(school_city)
-      const varAssignRegex = /school_city\s*=\s*["']([^"']*)["']/g;
-      const varMatch = varAssignRegex.exec(cleanCode);
+      for (let line of lines) {
+        line = line.trim();
+        // Skip comments and empty lines
+        if (line.startsWith('#') || !line) continue;
 
-      if (activeChallenge.id === 'c1111111-1111-1111-1111-111111111111') {
-        if (match && match[1] === expected) {
-          stdout = match[1];
-        } else {
-          stdout = match ? match[1] : '...';
+        // Match variable assignments like: school_city = "Tangier" or x = 'value'
+        const assignmentMatch = line.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*["']([^"']*)["']$/);
+        if (assignmentMatch) {
+          const varName = assignmentMatch[1];
+          const varVal = assignmentMatch[2];
+          variables[varName] = varVal;
+          continue;
         }
-      } else if (activeChallenge.id === 'c2222221-2222-2222-2222-222222222221') {
-        if (varMatch && varMatch[1] === expected) {
-          stdout = varMatch[1];
-        } else {
-          stdout = varMatch ? varMatch[1] : 'Canada';
+
+        // Match print statement: print("...") or print(var_name)
+        const printMatch = line.match(/^print\s*\(\s*(.*)\s*\)$/);
+        if (printMatch) {
+          const arg = printMatch[1].trim();
+          // Check if argument is quoted string
+          const stringMatch = arg.match(/^["']([^"']*)["']$/);
+          if (stringMatch) {
+            outputLines.push(stringMatch[1]);
+          } else if (variables[arg] !== undefined) {
+            outputLines.push(variables[arg]);
+          } else {
+            // Fallback: if it's print(something) and not a recognized variable,
+            // strip quotes if any, or output the raw text.
+            const cleanArg = arg.replace(/^["']|["']$/g, '');
+            outputLines.push(cleanArg);
+          }
         }
       }
+
+      const stdout = outputLines.join('\n').trim();
 
       if (stdout === expected) {
         setTerminalLogs(prev => [
           ...prev,
-          `SUCCESS: Variable evaluation matches expected outcome.`,
+          `SUCCESS: Output matches expected outcome.`,
           `[STDOUT]: ${stdout}`,
           `🎉 All tests passed successfully! +${activeChallenge.xp_reward} XP rewarded.`
         ]);
@@ -177,7 +191,7 @@ export default function MissionDetailPage() {
       } else {
         setTerminalLogs(prev => [
           ...prev,
-          `[STDOUT]: ${stdout || 'Error: Output mismatch or indentation parse issue.'}`,
+          `[STDOUT]: ${stdout || '(no output)'}`,
           `❌ TEST FAILED: Output did not match expected string: "${expected}".`,
           `Review your inputs and run again.`
         ]);
