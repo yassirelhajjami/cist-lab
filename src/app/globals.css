@@ -1,26 +1,85 @@
 @import "tailwindcss";
 
+@theme {
+  --color-navy-dark: #071524;
+  --color-navy-deep: #0B2545;
+  --color-navy-medium: #134074;
+  --color-navy-light: #1E558E;
+  --color-maple-red: #C53030;
+  --color-maple-dark: #9B2C2C;
+  --color-maple-light: #E53E3E;
+  --color-gold-accent: #D4AF37;
+  --color-gold-hover: #B8901C;
+  --color-gold-light: #F6E05E;
+  
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-float: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --border: #e2e8f0;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark-theme {
+  --background: #071524;
+  --foreground: #f8fafc;
+  --card: #0B2545;
+  --card-foreground: #f8fafc;
+  --border: #134074;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  transition: background-color 0.3s, color 0.3s;
 }
+
+/* Custom Scrollbar for premium feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #134074;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #C53030;
+}
+
+/* Custom visual styles */
+.glassmorphism {
+  background: rgba(11, 37, 69, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(19, 64, 116, 0.4);
+}
+
+.gold-gradient {
+  background: linear-gradient(135deg, #D4AF37 0%, #F6E05E 100%);
+}
+
+.maple-gradient {
+  background: linear-gradient(135deg, #C53030 0%, #9B2C2C 100%);
+}
+
+.navy-gradient {
+  background: linear-gradient(135deg, #0B2545 0%, #071524 100%);
+}
+
