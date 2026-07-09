@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 @theme {
-  --color-navy-dark: #071524;
-  --color-navy-deep: #0B2545;
-  --color-navy-medium: #134074;
-  --color-navy-light: #1E558E;
-  --color-maple-red: #C53030;
-  --color-maple-dark: #9B2C2C;
-  --color-maple-light: #E53E3E;
-  --color-gold-accent: #D4AF37;
-  --color-gold-hover: #B8901C;
-  --color-gold-light: #F6E05E;
+  --color-navy-dark: #0f1e2d;     /* Moodle dark corporate slate */
+  --color-navy-deep: #1e3d59;     /* Moodle medium blue-gray */
+  --color-navy-medium: #1177d0;   /* Moodle standard blue link/action button color */
+  --color-navy-light: #4499ee;    /* Moodle light blue highlight */
+  --color-maple-red: #c1392b;     /* Moodle corporate danger alert */
+  --color-maple-dark: #962c22;
+  --color-maple-light: #e74c3c;
+  --color-gold-accent: #f25c27;   /* Moodle primary Brand Orange */
+  --color-gold-hover: #d3481b;    /* Moodle hover brand orange */
+  --color-gold-light: #ffaa88;    /* Moodle light orange highlight */
   
   --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-float: float 4s ease-in-out infinite;
@@ -19,6 +19,11 @@
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(-10px); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
 }
 
 :root {
@@ -30,11 +35,11 @@
 }
 
 .dark-theme {
-  --background: #071524;
+  --background: #0f1e2d;
   --foreground: #f8fafc;
-  --card: #0B2545;
+  --card: #1e3d59;
   --card-foreground: #f8fafc;
-  --border: #134074;
+  --border: #1177d0;
 }
 
 body {
@@ -55,31 +60,60 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #134074;
+  background: #1177d0;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #C53030;
+  background: #f25c27;
 }
 
 /* Custom visual styles */
 .glassmorphism {
-  background: rgba(11, 37, 69, 0.85);
+  background: rgba(30, 61, 89, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(19, 64, 116, 0.4);
+  border: 1px solid rgba(17, 119, 208, 0.4);
 }
 
 .gold-gradient {
-  background: linear-gradient(135deg, #D4AF37 0%, #F6E05E 100%);
+  background: linear-gradient(135deg, #f25c27 0%, #ffaa88 100%);
 }
 
 .maple-gradient {
-  background: linear-gradient(135deg, #C53030 0%, #9B2C2C 100%);
+  background: linear-gradient(135deg, #c1392b 0%, #962c22 100%);
 }
 
 .navy-gradient {
-  background: linear-gradient(135deg, #0B2545 0%, #071524 100%);
+  background: linear-gradient(135deg, #1e3d59 0%, #0f1e2d 100%);
+}
+
+/* Issue #10: animate-fade-in was used in JSX but never defined */
+.animate-fade-in {
+  animation: fade-in 0.18s ease-out both;
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Issue #9: Tailwind v4 doesn't auto-generate fractional sizes like 4.5 */
+.h-4\.5 { height: 1.125rem; }
+.w-4\.5 { width:  1.125rem; }
+.h-3\.5 { height: 0.875rem; }
+.w-3\.5 { width:  0.875rem; }
+
+/* Custom utility to hide browser scrollbar while preserving functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
 }
 

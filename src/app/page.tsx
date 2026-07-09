@@ -177,7 +177,6 @@ export default function Home() {
       <footer className="mx-auto max-w-7xl px-6 py-12 border-t border-navy-light/25 flex flex-col md:flex-row items-center justify-between text-xs text-gray-400 gap-6">
         <div>
           <p>© 2026 Canadian International School Tangier. All rights reserved.</p>
-          <p className="mt-1 text-gray-500">CIST CodeQuest is built using Next.js, Supabase, and Tailwind CSS.</p>
         </div>
         <div className="flex space-x-4">
           <Link href="/login" className="hover:text-white transition uppercase font-bold">Portal Log</Link>

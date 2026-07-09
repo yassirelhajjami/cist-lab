@@ -23,7 +23,7 @@ export default function StudentsManagement() {
   const [grade, setGrade] = useState('Grade 10');
   const [classroom, setClassroom] = useState('Room 204');
   const [notes, setNotes] = useState('');
-  const [status, setStatus] = useState('active');
+  const [status, setStatus] = useState<'active' | 'inactive'>('active');
 
   // Adjust XP / Coins modal
   const [showXpModal, setShowXpModal] = useState<any>(null); // profile object or null
@@ -97,7 +97,7 @@ export default function StudentsManagement() {
           classroom,
           notes,
           password,
-          userId
+          userId: userId || undefined
         });
       }
       
@@ -412,7 +412,7 @@ export default function StudentsManagement() {
                     onChange={(e) => setGrade(e.target.value)}
                     className="w-full rounded-lg border border-slate-250 bg-slate-50 px-3 py-2 text-xs font-semibold"
                   >
-                    {['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].map(g => (
+                    {Array.from({ length: 12 }, (_, i) => `Grade ${i + 1}`).map(g => (
                       <option key={g} value={g}>{g}</option>
                     ))}
                   </select>
@@ -444,7 +444,7 @@ export default function StudentsManagement() {
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Account Status</label>
                   <select
                     value={status}
-                    onChange={(e) => setStatus(e.target.value)}
+                    onChange={(e) => setStatus(e.target.value as 'active' | 'inactive')}
                     className="w-full rounded-lg border border-slate-250 bg-slate-50 px-3 py-2 text-xs font-semibold"
                   >
                     <option value="active">Active</option>

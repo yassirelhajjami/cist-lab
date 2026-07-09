@@ -20,7 +20,7 @@ export default function AdminChallengesManagement() {
   const [instructions, setInstructions] = useState('');
   const [starterCode, setStarterCode] = useState('');
   const [expectedOutput, setExpectedOutput] = useState('');
-  const [difficulty, setDifficulty] = useState('beginner');
+  const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
   const [xpReward, setXpReward] = useState(75);
   const [coinReward, setCoinReward] = useState(30);
 
@@ -274,7 +274,7 @@ export default function AdminChallengesManagement() {
                   <label className="block text-slate-500 uppercase mb-1.5">Difficulty</label>
                   <select
                     value={difficulty}
-                    onChange={(e) => setDifficulty(e.target.value)}
+                    onChange={(e) => setDifficulty(e.target.value as 'beginner' | 'intermediate' | 'advanced')}
                     className="w-full rounded-lg border border-slate-250 bg-slate-50 px-3 py-2 font-semibold text-slate-850 text-xs"
                   >
                     <option value="beginner">Beginner</option>

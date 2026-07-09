@@ -2,16 +2,20 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { dbService, getRankAndLevelForXP, localDB } from '@/lib/db';
-import { Trophy, Star, Award, Zap } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { dbService, getRankAndLevelForXP } from '@/lib/db';
+import { Trophy, Award } from 'lucide-react';
+
+import { Profile, Student, Notification as DbNotification } from '@/types';
+import { User } from '@supabase/supabase-js';
 
 interface AppContextType {
-  user: any;
-  profile: any;
-  student: any;
+  user: User | null;
+  profile: Profile | null;
+  student: Student | null;
   loading: boolean;
-  notifications: any[];
+  notifications: DbNotification[];
+  loginStreak: number;
   login: (email: string, password?: string) => Promise<any>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -26,16 +30,16 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [student, setStudent] = useState<any>(null);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [student, setStudent] = useState<Student | null>(null);
+  const [notifications, setNotifications] = useState<DbNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [levelUpInfo, setLevelUpInfo] = useState<any>(null);
+  const [loginStreak, setLoginStreak] = useState(0);
   
   const router = useRouter();
-  const pathname = usePathname();
 
   const refreshUser = async () => {
     try {
@@ -44,6 +48,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setUser(current.user);
         setProfile(current.profile);
         setStudent(current.student);
+        
+        // Restore login streak from localStorage
+        if (current.profile.role === 'student' && typeof window !== 'undefined') {
+          const streakKey = `cist_cq_streak_${current.profile.id}`;
+          const storedStreak = parseInt(localStorage.getItem(streakKey) || '0', 10);
+          setLoginStreak(storedStreak);
+        }
+
         // Load notifications
         const notifs = await dbService.getNotifications(current.profile.id);
         setNotifications(notifs);
@@ -61,9 +73,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshUser();
-    // Daily login streak checker could be triggered here
-  }, [pathname]);
+    // refreshUser is intentionally only called once on mount.
+    // Route changes do NOT re-trigger auth so we avoid N+1 Supabase calls.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = async (email: string, password?: string) => {
     setLoading(true);
@@ -79,10 +94,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Trigger daily login XP (+10 XP) if it's a student and first login of day
       if (res.profile.role === 'student') {
         const lastLoginKey = `cist_cq_last_login_${res.profile.id}`;
+        const streakKey = `cist_cq_streak_${res.profile.id}`;
         const todayStr = new Date().toDateString();
-        const lastLogin = localStorage.getItem(lastLoginKey);
+        const yesterdayStr = new Date(Date.now() - 86400000).toDateString();
+        const lastLogin = typeof window !== 'undefined' ? localStorage.getItem(lastLoginKey) : null;
+
+        // Compute streak
+        let newStreak = 1;
+        if (typeof window !== 'undefined') {
+          const storedStreak = parseInt(localStorage.getItem(streakKey) || '0', 10);
+          if (lastLogin === yesterdayStr) {
+            // Consecutive day — increment
+            newStreak = storedStreak + 1;
+          } else if (lastLogin === todayStr) {
+            // Already logged in today — keep current streak
+            newStreak = storedStreak || 1;
+          }
+          // else: gap > 1 day — reset to 1
+          localStorage.setItem(streakKey, String(newStreak));
+        }
+        setLoginStreak(newStreak);
+
         if (lastLogin !== todayStr) {
-          localStorage.setItem(lastLoginKey, todayStr);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(lastLoginKey, todayStr);
+          }
           // Update profile XP directly inside state and db
           const oldLevel = res.profile.level;
           const newXp = res.profile.xp + 10;
@@ -106,7 +142,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       return res;
     } catch (err) {
-      setLoading(false);
       throw err;
     } finally {
       setLoading(false);
@@ -191,6 +226,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         student,
         loading,
         notifications,
+        loginStreak,
         login,
         logout,
         refreshUser,

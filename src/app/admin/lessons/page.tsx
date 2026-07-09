@@ -7,6 +7,7 @@ import { ListTodo, PlusCircle, Edit3, Trash2, ShieldAlert, AlertCircle } from 'l
 
 export default function AdminLessonsManagement() {
   const [missions, setMissions] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
   const [selectedMissionId, setSelectedMissionId] = useState('');
   const [lessons, setLessons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,13 +21,19 @@ export default function AdminLessonsManagement() {
   const [videoUrl, setVideoUrl] = useState('');
   const [codeExample, setCodeExample] = useState('');
   const [orderIndex, setOrderIndex] = useState(1);
+  const [editMissionId, setEditMissionId] = useState('');
 
-  async function loadMissions() {
+  async function loadInitialData() {
     try {
-      const all = await dbService.getMissions();
-      setMissions(all);
-      if (all.length > 0) {
-        setSelectedMissionId(all[0].id);
+      const [allMissions, allCourses] = await Promise.all([
+        dbService.getMissions(),
+        dbService.getCourses()
+      ]);
+      setMissions(allMissions);
+      setCourses(allCourses);
+      if (allMissions.length > 0) {
+        setSelectedMissionId(allMissions[0].id);
+        setEditMissionId(allMissions[0].id);
       }
     } catch (err) {
       console.error(err);
@@ -36,7 +43,7 @@ export default function AdminLessonsManagement() {
   }
 
   useEffect(() => {
-    loadMissions();
+    loadInitialData();
   }, []);
 
   async function loadLessons() {
@@ -63,7 +70,7 @@ export default function AdminLessonsManagement() {
 
     try {
       const data = {
-        mission_id: selectedMissionId,
+        mission_id: editMissionId || selectedMissionId,
         title,
         content,
         video_url: videoUrl,
@@ -73,10 +80,10 @@ export default function AdminLessonsManagement() {
 
       if (isEditing) {
         await dbService.updateLesson(isEditing, data);
-        setMsg('🎉 Lesson node updated successfully!');
+        setMsg('🎉 Lesson slide updated successfully!');
       } else {
         await dbService.createLesson(data);
-        setMsg('🎉 New lesson node created successfully!');
+        setMsg('🎉 New lesson slide created successfully!');
       }
 
       setShowModal(false);
@@ -99,6 +106,7 @@ export default function AdminLessonsManagement() {
     setVideoUrl(l.video_url || '');
     setCodeExample(l.code_example || '');
     setOrderIndex(l.order_index);
+    setEditMissionId(l.mission_id || selectedMissionId);
     setShowModal(true);
   };
 
@@ -146,6 +154,7 @@ export default function AdminLessonsManagement() {
             setVideoUrl('');
             setCodeExample('');
             setOrderIndex(lessons.length + 1);
+            setEditMissionId(selectedMissionId);
             setShowModal(true);
           }}
           disabled={!selectedMissionId}
@@ -168,15 +177,22 @@ export default function AdminLessonsManagement() {
         <label className="text-xs font-black uppercase text-slate-650 shrink-0">Pathway Module:</label>
         <select
           value={selectedMissionId}
-          onChange={(e) => setSelectedMissionId(e.target.value)}
+          onChange={(e) => {
+            setSelectedMissionId(e.target.value);
+            setEditMissionId(e.target.value);
+          }}
           className="w-full rounded-lg border border-slate-250 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-800"
         >
           <option value="">-- Select Mission --</option>
-          {missions.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.title} ({m.category})
-            </option>
-          ))}
+          {missions.map((m) => {
+            const correspondingCourse = courses.find(c => c.id === m.course_id);
+            const gradeLabel = correspondingCourse ? correspondingCourse.grade : 'Unassigned';
+            return (
+              <option key={m.id} value={m.id}>
+                {m.title} ({m.category}) - [{gradeLabel}]
+              </option>
+            );
+          })}
         </select>
       </div>
 
@@ -252,8 +268,8 @@ export default function AdminLessonsManagement() {
             </h3>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="sm:col-span-2">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
                   <label className="block text-slate-500 uppercase mb-1.5">Slide Title</label>
                   <input
                     type="text"
@@ -262,6 +278,39 @@ export default function AdminLessonsManagement() {
                     className="w-full rounded-lg border border-slate-250 bg-slate-50 px-3 py-2 font-semibold text-slate-850 text-xs"
                     placeholder="Python Variables declaration"
                     required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 uppercase mb-1.5">Pathway Module (Target Grade)</label>
+                  <select
+                    value={editMissionId}
+                    onChange={(e) => setEditMissionId(e.target.value)}
+                    className="w-full rounded-lg border border-slate-250 bg-slate-50 px-3 py-2 font-semibold text-slate-850 text-xs"
+                    required
+                  >
+                    <option value="">-- Choose Module --</option>
+                    {missions.map((m) => {
+                      const correspondingCourse = courses.find(c => c.id === m.course_id);
+                      const gradeLabel = correspondingCourse ? correspondingCourse.grade : 'Unassigned';
+                      return (
+                        <option key={m.id} value={m.id}>
+                          {m.title} ({m.category}) - [{gradeLabel}]
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="col-span-2">
+                  <label className="block text-slate-500 uppercase mb-1.5">YouTube Video Embed link (Optional)</label>
+                  <input
+                    type="text"
+                    value={videoUrl}
+                    onChange={(e) => setVideoUrl(e.target.value)}
+                    className="w-full rounded-lg border border-slate-250 bg-slate-50 px-3 py-2 font-semibold text-slate-850 text-xs"
+                    placeholder="https://www.youtube.com/embed/..."
                   />
                 </div>
                 <div>
@@ -285,17 +334,6 @@ export default function AdminLessonsManagement() {
                   placeholder="Explain details, loop operations, or variable syntax principles..."
                   className="w-full h-24 rounded-lg border border-slate-250 bg-slate-50 px-3 py-2 font-semibold text-slate-850 text-xs resize-none"
                   required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-500 uppercase mb-1.5">YouTube Video Embed link (Optional)</label>
-                <input
-                  type="text"
-                  value={videoUrl}
-                  onChange={(e) => setVideoUrl(e.target.value)}
-                  className="w-full rounded-lg border border-slate-250 bg-slate-50 px-3 py-2 font-semibold text-slate-850 text-xs"
-                  placeholder="https://www.youtube.com/embed/..."
                 />
               </div>
 

@@ -44,6 +44,12 @@ export default function ProjectsShowcasePage() {
   const handleVote = async (projectId: string) => {
     if (!student) return;
     setErrorMsg('');
+    const targetProject = projects.find(p => p.id === projectId);
+    if (targetProject && targetProject.student_id === student.id) {
+      setErrorMsg('You cannot vote for your own project!');
+      setTimeout(() => setErrorMsg(''), 4000);
+      return;
+    }
     try {
       await dbService.voteProject(projectId, student.id);
       setVotedProjects(prev => [...prev, projectId]);
@@ -121,6 +127,7 @@ export default function ProjectsShowcasePage() {
           {filteredProjects.map((p) => {
             const author = p.students?.profiles || { full_name: 'CIST Student', avatar_url: '', rank_title: 'Rookie Coder' };
             const hasVoted = votedProjects.includes(p.id);
+            const isOwnProject = p.student_id === student?.id;
 
             return (
               <div
@@ -203,10 +210,13 @@ export default function ProjectsShowcasePage() {
                       {/* Vote Button */}
                       <button
                         onClick={() => handleVote(p.id)}
-                        disabled={hasVoted}
+                        disabled={hasVoted || isOwnProject}
+                        title={isOwnProject ? "You cannot vote for your own project" : undefined}
                         className={`flex items-center space-x-1.5 px-4.5 py-2 rounded-lg text-xs font-bold transition duration-200 border shadow-sm ${
                           hasVoted
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : isOwnProject
+                            ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
                             : 'bg-white hover:bg-navy-deep hover:text-white border-slate-200 text-slate-700 active:scale-95'
                         }`}
                       >

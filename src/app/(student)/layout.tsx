@@ -10,7 +10,7 @@ import JockerAI from '@/components/ui/JockerAI';
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   return (
     <RoleGuard allowedRole="student">
-      <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900">
+      <div className="flex flex-col min-h-screen lg:h-screen lg:overflow-hidden bg-slate-50 text-slate-900">
         <Navbar />
         <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
           <Sidebar />

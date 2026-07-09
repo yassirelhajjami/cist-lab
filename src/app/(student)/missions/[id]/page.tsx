@@ -19,6 +19,141 @@ import {
   Trophy
 } from 'lucide-react';
 
+interface SandboxResult {
+  stdout: string;
+  error: string;
+}
+
+function runPythonSandbox(code: string): SandboxResult {
+  const lines = code.split('\n');
+  const variables: Record<string, any> = {};
+  const outputs: string[] = [];
+
+  const evalArg = (arg: string, vars: Record<string, any>): string => {
+    const strMatch = arg.match(/^["']([^"']*)["']$/);
+    if (strMatch) return strMatch[1];
+    if (vars[arg] !== undefined) return String(vars[arg]);
+    
+    let clean = arg;
+    for (const [k, v] of Object.entries(vars)) {
+      clean = clean.replace(new RegExp(`\\b${k}\\b`, 'g'), String(v));
+    }
+    
+    clean = clean.replace(/\s+/g, '');
+    const mathMatch = clean.match(/^(\d+(?:\.\d+)?)([\+\-\*\/])(\d+(?:\.\d+)?)$/);
+    if (mathMatch) {
+      const left = parseFloat(mathMatch[1]);
+      const op = mathMatch[2];
+      const right = parseFloat(mathMatch[3]);
+      if (op === '+') return String(left + right);
+      if (op === '-') return String(left - right);
+      if (op === '*') return String(left * right);
+      if (op === '/') return String(left / right);
+    }
+    return clean.replace(/^["']|["']$/g, '');
+  };
+
+  try {
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      if (!line || line.startsWith('#')) {
+        i++;
+        continue;
+      }
+
+      // Loops
+      const loopMatch = line.match(/^for\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+range\s*\(([^)]+)\)\s*:/);
+      if (loopMatch) {
+        const loopVar = loopMatch[1];
+        const args = loopMatch[2].split(',').map(a => a.trim());
+        let start = 0;
+        let end = 0;
+        if (args.length === 1) {
+          end = parseInt(args[0], 10);
+        } else if (args.length === 2) {
+          start = parseInt(args[0], 10);
+          end = parseInt(args[1], 10);
+        }
+
+        const body: string[] = [];
+        let j = i + 1;
+        while (j < lines.length) {
+          const nextLineRaw = lines[j];
+          if (!nextLineRaw.trim()) {
+            j++;
+            continue;
+          }
+          if (/^\s+/.test(nextLineRaw)) {
+            body.push(nextLineRaw);
+            j++;
+          } else {
+            break;
+          }
+        }
+
+        for (let val = start; val < end; val++) {
+          variables[loopVar] = val;
+          for (const bl of body) {
+            const cb = bl.trim();
+            if (!cb || cb.startsWith('#')) continue;
+            const printMatch = cb.match(/^print\s*\(\s*(.*)\s*\)$/);
+            if (printMatch) {
+              outputs.push(evalArg(printMatch[1].trim(), variables));
+            }
+          }
+        }
+        i = j;
+        continue;
+      }
+
+      // Prints
+      const printMatch = line.match(/^print\s*\(\s*(.*)\s*\)$/);
+      if (printMatch) {
+        outputs.push(evalArg(printMatch[1].trim(), variables));
+        i++;
+        continue;
+      }
+
+      // Assignments
+      const assignMatch = line.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.*)$/);
+      if (assignMatch) {
+        const vName = assignMatch[1];
+        const vExpr = assignMatch[2].trim();
+        variables[vName] = evalArg(vExpr, variables);
+      }
+      i++;
+    }
+    return { stdout: outputs.join('\n').trim(), error: '' };
+  } catch (err: any) {
+    return { stdout: '', error: err.message };
+  }
+}
+
+function runJsSandbox(code: string): SandboxResult {
+  const logsList: string[] = [];
+  const customConsole = {
+    log: (...args: any[]) => {
+      logsList.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+    }
+  };
+
+  try {
+    // eslint-disable-next-line no-new-func
+    const sandbox = new Function('console', `
+      try {
+        ${code}
+      } catch(e) {
+        throw e;
+      }
+    `);
+    sandbox(customConsole);
+    return { stdout: logsList.join('\n').trim(), error: '' };
+  } catch (err: any) {
+    return { stdout: '', error: err.message };
+  }
+}
+
 export default function MissionDetailPage() {
   const { id } = useParams() as { id: string };
   const { student, profile, addXpAndCoins } = useApp();
@@ -36,6 +171,22 @@ export default function MissionDetailPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [attemptsCount, setAttemptsCount] = useState(0);
+  const [secondsActive, setSecondsActive] = useState(0);
+
+  // Challenge dynamic timer
+  useEffect(() => {
+    if (!activeItem || activeItem.type !== 'challenge') return;
+    setSecondsActive(0);
+    setAttemptsCount(0);
+
+    const interval = setInterval(() => {
+      setSecondsActive(prev => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeItem]);
+
   useEffect(() => {
     async function loadMissionDetails() {
       if (!student) return;
@@ -46,6 +197,17 @@ export default function MissionDetailPage() {
           router.push('/missions');
           return;
         }
+
+        // Access guard: enforce student grade matching
+        const courses = await dbService.getCourses();
+        const missionCourse = courses.find((c: any) => c.id === foundMission.course_id);
+        const isAdmin = profile?.role === 'admin';
+        const studentGrade = student?.grade || profile?.grade || 'Grade 10';
+        if (!isAdmin && missionCourse && missionCourse.grade !== studentGrade) {
+          router.push('/missions');
+          return;
+        }
+
         setMission(foundMission);
 
         const foundLessons = await dbService.getLessons(id);
@@ -132,67 +294,39 @@ export default function MissionDetailPage() {
   const handleRunCode = () => {
     if (!activeChallenge) return;
     setIsRunning(true);
-    setTerminalLogs(prev => [...prev, '> Running check test...']);
-    
-    // Simulating Python interpretation console dynamically
+    setAttemptsCount(prev => prev + 1);
+    setTerminalLogs(prev => [...prev, `> Executing script in sandboxed runtime...`]);
+
     setTimeout(() => {
       setIsRunning(false);
+      const isPython = (mission.category || '').toLowerCase() === 'python' || code.includes('#') || !code.includes('console.log');
       
-      const cleanCode = code.trim();
+      const { stdout, error } = isPython 
+        ? runPythonSandbox(code)
+        : runJsSandbox(code);
+
       const expected = activeChallenge.expected_output.trim();
 
-      const lines = cleanCode.split('\n');
-      const variables: Record<string, string> = {};
-      const outputLines: string[] = [];
-
-      for (let line of lines) {
-        line = line.trim();
-        // Skip comments and empty lines
-        if (line.startsWith('#') || !line) continue;
-
-        // Match variable assignments like: school_city = "Tangier" or x = 'value'
-        const assignmentMatch = line.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*["']([^"']*)["']$/);
-        if (assignmentMatch) {
-          const varName = assignmentMatch[1];
-          const varVal = assignmentMatch[2];
-          variables[varName] = varVal;
-          continue;
-        }
-
-        // Match print statement: print("...") or print(var_name)
-        const printMatch = line.match(/^print\s*\(\s*(.*)\s*\)$/);
-        if (printMatch) {
-          const arg = printMatch[1].trim();
-          // Check if argument is quoted string
-          const stringMatch = arg.match(/^["']([^"']*)["']$/);
-          if (stringMatch) {
-            outputLines.push(stringMatch[1]);
-          } else if (variables[arg] !== undefined) {
-            outputLines.push(variables[arg]);
-          } else {
-            // Fallback: if it's print(something) and not a recognized variable,
-            // strip quotes if any, or output the raw text.
-            const cleanArg = arg.replace(/^["']|["']$/g, '');
-            outputLines.push(cleanArg);
-          }
-        }
-      }
-
-      const stdout = outputLines.join('\n').trim();
-
-      if (stdout === expected) {
+      if (error) {
         setTerminalLogs(prev => [
           ...prev,
-          `SUCCESS: Output matches expected outcome.`,
+          `❌ RUNTIME ERROR: ${error}`,
+          `Please fix syntax / execution errors and run again.`
+        ]);
+        setIsSuccess(false);
+      } else if (stdout === expected) {
+        setTerminalLogs(prev => [
+          ...prev,
+          `SUCCESS: Output matches target condition.`,
           `[STDOUT]: ${stdout}`,
-          `🎉 All tests passed successfully! +${activeChallenge.xp_reward} XP rewarded.`
+          `🎉 All tests passed successfully! Click Publish to submit.`
         ]);
         setIsSuccess(true);
       } else {
         setTerminalLogs(prev => [
           ...prev,
-          `[STDOUT]: ${stdout || '(no output)'}`,
-          `❌ TEST FAILED: Output did not match expected string: "${expected}".`,
+          `[STDOUT]: ${stdout || '(no console output)'}`,
+          `❌ TEST FAILED: Output did not match expected value: "${expected}".`,
           `Review your inputs and run again.`
         ]);
         setIsSuccess(false);
@@ -203,7 +337,17 @@ export default function MissionDetailPage() {
   const handleSubmitChallenge = async () => {
     if (!student || !profile || !activeChallenge || !isSuccess) return;
     try {
-      await dbService.completeChallenge(student.id, profile.id, mission.id, activeChallenge.id, activeChallenge.xp_reward, activeChallenge.coin_reward);
+      await dbService.completeChallenge(
+        student.id,
+        profile.id,
+        mission.id,
+        activeChallenge.id,
+        activeChallenge.xp_reward,
+        activeChallenge.coin_reward,
+        100,
+        secondsActive,
+        attemptsCount
+      );
       await addXpAndCoins(activeChallenge.xp_reward, activeChallenge.coin_reward, `Completed Challenge: ${activeChallenge.title}`);
 
       // Refresh progress
@@ -321,8 +465,8 @@ export default function MissionDetailPage() {
                 </div>
               )}
 
-              <div className="text-sm text-slate-600 leading-relaxed space-y-4">
-                <p>{activeLesson.content}</p>
+              <div className="text-sm text-slate-650 leading-relaxed space-y-4">
+                {renderMarkdown(activeLesson.content)}
               </div>
 
               {activeLesson.code_example && (
@@ -475,4 +619,67 @@ export default function MissionDetailPage() {
       </div>
     </div>
   );
+}
+
+function renderMarkdown(content: string) {
+  if (!content) return null;
+  const blocks = content.split('\n\n');
+  
+  return blocks.map((block, idx) => {
+    const trimmed = block.trim();
+    if (!trimmed) return null;
+
+    // Check for image: ![alt](url)
+    const imgRegex = /^!\[([^\]]*)\]\(([^)]+)\)$/;
+    const imgMatch = trimmed.match(imgRegex);
+    if (imgMatch) {
+      return (
+        <div key={idx} className="my-5 text-center">
+          <img
+            src={imgMatch[2]}
+            alt={imgMatch[1]}
+            className="rounded-xl border border-slate-200 shadow-md max-h-72 object-contain mx-auto max-w-full hover:scale-[1.01] transition duration-200"
+          />
+          {imgMatch[1] && (
+            <span className="text-[10px] font-black text-slate-400 block mt-2.5 uppercase tracking-widest">
+              {imgMatch[1]}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    // Check for bullet list lines
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      const lines = trimmed.split('\n');
+      return (
+        <ul key={idx} className="list-disc pl-5 space-y-2.5 my-4 text-slate-650 text-xs font-semibold leading-relaxed">
+          {lines.map((line, lIdx) => {
+            const lineContent = line.replace(/^[-*]\s+/, '');
+            return <li key={lIdx}>{parseInlineStyles(lineContent)}</li>;
+          })}
+        </ul>
+      );
+    }
+
+    // Normal paragraph
+    return (
+      <p key={idx} className="leading-relaxed text-xs text-slate-600 my-3 font-semibold">
+        {parseInlineStyles(trimmed)}
+      </p>
+    );
+  });
+}
+
+function parseInlineStyles(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index} className="font-black text-slate-900">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={index} className="bg-slate-100 border border-slate-200 text-gold-accent px-1.5 py-0.5 rounded text-[11px] font-mono font-bold">{part.slice(1, -1)}</code>;
+    }
+    return part;
+  });
 }

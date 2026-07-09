@@ -4,7 +4,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { Mail, Lock, ShieldCheck, Zap, Sparkles } from 'lucide-react';
+import { Mail, Lock, ShieldCheck, Zap } from 'lucide-react';
 
 function LoginContent() {
   const { login, profile, user } = useApp();
@@ -40,7 +40,7 @@ function LoginContent() {
     setLoading(true);
 
     try {
-      const session = await login(email, password);
+      await login(email, password);
       // Success. Redirect is handled by the useEffect above
     } catch (err: any) {
       setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
@@ -48,11 +48,7 @@ function LoginContent() {
     }
   };
 
-  const handleQuickLogin = (quickEmail: string) => {
-    setEmail(quickEmail);
-    setPassword('password');
-    setErrorMsg('');
-  };
+
 
   return (
     <div className="min-h-screen flex flex-col bg-navy-dark text-white items-center justify-center p-4 relative overflow-hidden">
@@ -134,42 +130,7 @@ function LoginContent() {
           </button>
         </form>
 
-        {/* Developer Sandbox Accounts quick-fill */}
-        <div className="mt-8 pt-6 border-t border-navy-light/25">
-          <div className="flex items-center space-x-2 text-gold-accent font-bold uppercase text-[10px] tracking-widest mb-3">
-            <Sparkles className="h-3 w-3" />
-            <span>Developer Quick Access Keys</span>
-          </div>
-          <div className="space-y-2">
-            <button
-              onClick={() => handleQuickLogin('admin@cist.edu')}
-              className="w-full flex items-center justify-between text-left rounded-lg bg-navy-medium/40 hover:bg-navy-medium px-3.5 py-2 text-xs border border-navy-light/15 hover:border-gold-accent/45 transition"
-            >
-              <span className="font-semibold text-gray-200">Teacher: admin@cist.edu</span>
-              <span className="bg-gold-accent/20 text-gold-accent px-1.5 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider">
-                Admin
-              </span>
-            </button>
-            <button
-              onClick={() => handleQuickLogin('adam.b@cist.edu')}
-              className="w-full flex items-center justify-between text-left rounded-lg bg-navy-medium/40 hover:bg-navy-medium px-3.5 py-2 text-xs border border-navy-light/15 hover:border-maple-red/35 transition"
-            >
-              <span className="font-semibold text-gray-200">Student 1: adam.b@cist.edu</span>
-              <span className="bg-maple-red/20 text-maple-light px-1.5 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider">
-                Student
-              </span>
-            </button>
-            <button
-              onClick={() => handleQuickLogin('sofia.m@cist.edu')}
-              className="w-full flex items-center justify-between text-left rounded-lg bg-navy-medium/40 hover:bg-navy-medium px-3.5 py-2 text-xs border border-navy-light/15 hover:border-maple-red/35 transition"
-            >
-              <span className="font-semibold text-gray-200">Student 2: sofia.m@cist.edu</span>
-              <span className="bg-maple-red/20 text-maple-light px-1.5 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider">
-                Student
-              </span>
-            </button>
-          </div>
-        </div>
+
 
       </div>
 

@@ -32,6 +32,84 @@ export default function JockerAI() {
   const pathname = usePathname();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Floating button Drag & Move handlers
+  const [position, setPosition] = useState({ right: 24, bottom: 24 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef({ startX: 0, startY: 0, startRight: 24, startBottom: 24, hasMoved: false });
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startRight: position.right,
+      startBottom: position.bottom,
+      hasMoved: false
+    };
+    setIsDragging(true);
+    e.preventDefault();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLButtonElement>) => {
+    const touch = e.touches[0];
+    dragRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      startRight: position.right,
+      startBottom: position.bottom,
+      hasMoved: false
+    };
+    setIsDragging(true);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - dragRef.current.startX;
+      const dy = e.clientY - dragRef.current.startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        dragRef.current.hasMoved = true;
+      }
+      const newRight = Math.max(12, Math.min(window.innerWidth - 70, dragRef.current.startRight - dx));
+      const newBottom = Math.max(12, Math.min(window.innerHeight - 70, dragRef.current.startBottom - dy));
+      setPosition({ right: newRight, bottom: newBottom });
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      const dx = touch.clientX - dragRef.current.startX;
+      const dy = touch.clientY - dragRef.current.startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        dragRef.current.hasMoved = true;
+      }
+      const newRight = Math.max(12, Math.min(window.innerWidth - 70, dragRef.current.startRight - dx));
+      const newBottom = Math.max(12, Math.min(window.innerHeight - 70, dragRef.current.startBottom - dy));
+      setPosition({ right: newRight, bottom: newBottom });
+    };
+
+    const handleDragEnd = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleDragEnd);
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchend', handleDragEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [isDragging]);
+
+  const handleButtonClick = () => {
+    if (!dragRef.current.hasMoved) {
+      setIsOpen(!isOpen);
+    }
+  };
+
   // Initial greeting based on page context
   useEffect(() => {
     let greeting = "HAHAHA! Welcome to CIST CodeQuest, human friend! I'm JOCKER, your crazy coding companion! Ask me anything, or let me tell you a joke!";
@@ -121,7 +199,14 @@ export default function JockerAI() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-55 flex flex-col items-end">
+    <div 
+      className="fixed z-[55] flex flex-col items-end"
+      style={{
+        right: `${position.right}px`,
+        bottom: `${position.bottom}px`,
+        transition: isDragging ? 'none' : 'right 0.2s ease, bottom 0.2s ease'
+      }}
+    >
       
       {/* CHAT WINDOW */}
       {isOpen && (
@@ -129,7 +214,15 @@ export default function JockerAI() {
           {/* Header */}
           <div className="bg-navy-deep px-4 py-3 border-b border-navy-light/25 flex items-center justify-between shadow">
             <div className="flex items-center space-x-2">
-              <img src="/jocker_mascot.png" alt="Jocker" className="h-6 w-6 rounded-full object-cover bg-white border border-gold-accent/20" />
+              <img 
+                src="/jocker_mascot.png" 
+                alt="Jocker" 
+                className="h-6 w-6 rounded-full object-cover bg-white border border-gold-accent/20" 
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=jocker';
+                }}
+              />
               <div>
                 <h4 className="font-extrabold text-xs text-slate-100 flex items-center space-x-1">
                   <span>Jocker</span>
@@ -159,7 +252,15 @@ export default function JockerAI() {
                   m.sender === 'jocker' ? 'bg-gold-accent/15 border-gold-accent/25' : 'bg-maple-red/25 border-maple-red/35'
                 }`}>
                   {m.sender === 'jocker' ? (
-                    <img src="/jocker_mascot.png" alt="Jocker" className="h-full w-full object-cover" />
+                    <img 
+                      src="/jocker_mascot.png" 
+                      alt="Jocker" 
+                      className="h-full w-full object-cover" 
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=jocker';
+                      }}
+                    />
                   ) : (
                     <span className="text-xs">👤</span>
                   )}
@@ -177,7 +278,15 @@ export default function JockerAI() {
             {isTyping && (
               <div className="flex items-start space-x-2.5 max-w-[85%]">
                 <div className="h-7 w-7 rounded-md flex items-center justify-center shrink-0 border overflow-hidden bg-gold-accent/15 border-gold-accent/25">
-                  <img src="/jocker_mascot.png" alt="Jocker" className="h-full w-full object-cover" />
+                  <img 
+                    src="/jocker_mascot.png" 
+                    alt="Jocker" 
+                    className="h-full w-full object-cover" 
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=jocker';
+                    }}
+                  />
                 </div>
                 <div className="p-2.5 rounded-xl bg-navy-light/20 border border-navy-light/10 text-xs font-bold text-gold-accent animate-pulse">
                   Jocker is laughing...
@@ -199,7 +308,7 @@ export default function JockerAI() {
             />
             <button 
               type="submit"
-              className="h-8.5 w-8.5 rounded-xl bg-gold-accent hover:bg-gold-light text-navy-dark flex items-center justify-center transition active:scale-90 shadow"
+              className="h-[34px] w-[34px] rounded-xl bg-gold-accent hover:bg-gold-light text-navy-dark flex items-center justify-center transition active:scale-90 shadow"
             >
               <Send className="h-4 w-4" />
             </button>
@@ -209,13 +318,23 @@ export default function JockerAI() {
 
       {/* FLOAT COMPANION ACTION TRIGGER */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="h-14 w-14 rounded-full bg-navy-deep border-2 border-gold-accent shadow-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all relative group animate-bounce"
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
+        onClick={handleButtonClick}
+        className="h-14 w-14 rounded-full bg-navy-deep border-2 border-gold-accent shadow-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all relative group animate-bounce cursor-grab active:cursor-grabbing select-none"
         style={{ animationDuration: '4s' }}
         title="Jocker AI Companion"
       >
         <span className="absolute inset-0 rounded-full border-2 border-emerald-400 animate-ping opacity-25"></span>
-        <img src="/jocker_mascot.png" alt="Jocker Companion" className="h-9 w-9 object-contain" />
+        <img 
+          src="/jocker_mascot.png" 
+          alt="Jocker Companion" 
+          className="h-9 w-9 object-contain" 
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=jocker';
+          }}
+        />
       </button>
 
     </div>

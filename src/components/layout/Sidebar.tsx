@@ -23,7 +23,9 @@ import {
   FileSpreadsheet,
   Settings,
   ListTodo,
-  FolderLock
+  FolderLock,
+  Joystick,
+  Blocks
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -35,18 +37,23 @@ export default function Sidebar() {
 
   const isAdmin = profile.role === 'admin';
 
-  // Student Navigation Links
-  const studentLinks = [
+  // Student Navigation Links — split into two groups
+  const studentMainLinks = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Missions Path', href: '/missions', icon: Map },
-    { name: 'Logic', href: '/games', icon: Gamepad2 },
+    { name: 'Arcade', href: '/arcade', icon: Joystick },
+    { name: 'Scratch Studio', href: '/scratch', icon: Blocks },
+    { name: 'Logic Arena', href: '/games', icon: Gamepad2 },
     { name: 'Code Lab', href: '/code-lab', icon: Code2 },
     { name: 'Robotics Lab', href: '/robotics-lab', icon: Cpu },
+  ];
+
+  const studentSocialLinks = [
     { name: 'Community', href: '/community', icon: Users },
     { name: 'Showcase', href: '/projects', icon: Compass },
     { name: 'Leaderboard', href: '/leaderboard', icon: Trophy },
     { name: 'Badges', href: '/badges', icon: Award },
-    { name: 'My Profile', href: '/profile', icon: UserCircle }
+    { name: 'My Profile', href: '/profile', icon: UserCircle },
   ];
 
   // Admin Navigation Links
@@ -64,32 +71,43 @@ export default function Sidebar() {
     { name: 'Settings', href: '/admin/settings', icon: Settings }
   ];
 
-  const links = isAdmin ? adminLinks : studentLinks;
+  const links = isAdmin ? adminLinks : studentMainLinks;
 
-  const NavigationMenu = () => (
-    <nav className="flex flex-col space-y-1 p-4">
-      {links.map((link) => {
-        const Icon = link.icon;
-        const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
-        
-        return (
-          <Link
-            key={link.href}
-            href={link.href}
-            onClick={() => setMobileOpen(false)}
-            className={`flex items-center space-x-3 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
-              isActive
-                ? 'bg-maple-red text-white shadow-md border-l-4 border-gold-accent'
-                : 'text-gray-300 hover:bg-navy-medium hover:text-white'
-            }`}
-          >
-            <Icon className={`h-4.5 w-4.5 ${isActive ? 'text-gold-accent' : 'text-gray-400'}`} />
-            <span>{link.name}</span>
-          </Link>
-        );
-      })}
+  const renderNavLink = (link: { name: string; href: string; icon: React.ElementType }) => {
+    const Icon = link.icon;
+    const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
+    return (
+      <Link
+        key={link.href}
+        href={link.href}
+        onClick={() => setMobileOpen(false)}
+        className={`flex items-center space-x-3 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
+          isActive
+            ? 'bg-maple-red text-white shadow-md border-l-4 border-gold-accent'
+            : 'text-gray-300 hover:bg-navy-medium hover:text-white'
+        }`}
+      >
+        <Icon className={`h-4.5 w-4.5 ${isActive ? 'text-gold-accent' : 'text-gray-400'}`} />
+        <span>{link.name}</span>
+      </Link>
+    );
+  };
+
+  // Top nav section — learning tools
+  const TopNav = () => (
+    <nav className="flex flex-col p-4 space-y-1">
+      {(isAdmin ? adminLinks : studentMainLinks).map(renderNavLink)}
     </nav>
   );
+
+  // Bottom nav section — social & profile (students only)
+  const BottomNav = () =>
+    !isAdmin ? (
+      <div className="border-t border-navy-light/20 p-4 space-y-1">
+        <span className="block px-1 pb-1 text-[9px] font-black uppercase tracking-widest text-slate-500">Social</span>
+        {studentSocialLinks.map(renderNavLink)}
+      </div>
+    ) : null;
 
   return (
     <>
@@ -107,26 +125,24 @@ export default function Sidebar() {
       </div>
 
       {/* Desktop Drawer Sidebar */}
-      <aside className="hidden lg:flex w-64 flex-col bg-navy-deep border-r border-navy-light/25 text-white min-h-screen">
+      <aside className="hidden lg:flex w-64 flex-col bg-navy-deep border-r border-navy-light/25 text-white h-[calc(100vh-4rem)] sticky top-16">
+        {/* Header */}
+        <div className="p-4 border-b border-navy-light/20 flex items-center space-x-2 flex-shrink-0">
+          {isAdmin ? (
+            <Shield className="h-5 w-5 text-gold-accent" />
+          ) : (
+            <FolderLock className="h-5 w-5 text-maple-light" />
+          )}
+          <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">
+            {isAdmin ? 'ADMIN NAVIGATION' : 'QUEST NAVIGATION'}
+          </span>
+        </div>
+        {/* Scrollable top links */}
         <div className="flex-1 overflow-y-auto">
-          <div className="p-4 border-b border-navy-light/20 flex items-center space-x-2">
-            {isAdmin ? (
-              <Shield className="h-5 w-5 text-gold-accent" />
-            ) : (
-              <FolderLock className="h-5 w-5 text-maple-light" />
-            )}
-            <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">
-              {isAdmin ? 'ADMIN NAVIGATION' : 'QUEST NAVIGATION'}
-            </span>
-          </div>
-          <NavigationMenu />
+          <TopNav />
         </div>
-        
-        <div className="p-4 border-t border-navy-light/20 bg-navy-dark/40 text-center">
-          <p className="text-[10px] text-gray-500 font-semibold uppercase">
-            CIST CODEQUEST V1.0
-          </p>
-        </div>
+        {/* Social links pinned to bottom */}
+        <BottomNav />
       </aside>
 
       {/* Mobile Drawer Slide-out overlay */}
@@ -145,11 +161,9 @@ export default function Sidebar() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto mt-2">
-              <NavigationMenu />
+              <TopNav />
             </div>
-            <div className="p-4 border-t border-navy-light/20 bg-navy-dark/40 text-center text-[10px] text-gray-500">
-              Canadian International School
-            </div>
+            <BottomNav />
           </div>
           <div className="flex-grow" onClick={() => setMobileOpen(false)}></div>
         </div>

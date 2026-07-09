@@ -1,10 +1,10 @@
 // src/components/layout/Navbar.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { XP_LEVELS } from '@/lib/db';
-import { Bell, Coins, Flame, LogOut, ShieldAlert, Sparkles, User, Check, Trash } from 'lucide-react';
+import { Bell, Coins, Flame, LogOut, ShieldAlert, Sparkles, User, Check } from 'lucide-react';
 import Link from 'next/link';
 import { dbService } from '@/lib/db';
 
@@ -26,9 +26,33 @@ export function getXpProgress(xp: number) {
 }
 
 export default function Navbar() {
-  const { profile, notifications, logout, refreshNotifications } = useApp();
+  const { profile, notifications, logout, refreshNotifications, loginStreak } = useApp();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        notificationsRef.current &&
+        !notificationsRef.current.contains(event.target as Node)
+      ) {
+        setShowNotifications(false);
+      }
+      if (
+        userDropdownRef.current &&
+        !userDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowUserDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   if (!profile) return null;
 
@@ -43,9 +67,7 @@ export default function Navbar() {
   };
 
   const handleMarkAllAsRead = async () => {
-    for (const n of unreadNotifs) {
-      await dbService.markNotificationRead(n.id);
-    }
+    await Promise.all(unreadNotifs.map(n => dbService.markNotificationRead(n.id)));
     await refreshNotifications();
   };
 
@@ -54,7 +76,15 @@ export default function Navbar() {
       {/* Brand Logo & Name */}
       <div className="flex items-center space-x-3">
         <Link href={isAdmin ? '/admin' : '/dashboard'} className="flex items-center space-x-2">
-          <img src="/cist.png" alt="CIST Logo" className="h-10 w-10 object-contain rounded-xl shadow-lg border border-navy-light/10 bg-white p-0.5" />
+          <img 
+            src="/cist.png" 
+            alt="CIST Logo" 
+            className="h-10 w-10 object-contain rounded-xl shadow-lg border border-navy-light/10 bg-white p-0.5" 
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=cist';
+            }}
+          />
           <div>
             <h1 className="text-lg font-black tracking-tight uppercase leading-none">
               CIST <span className="text-gold-accent">CodeQuest</span>
@@ -97,7 +127,7 @@ export default function Navbar() {
           {/* Daily Streak (Mocked 3 days streak initially) */}
           <div className="flex items-center space-x-1.5 rounded-full bg-maple-red/25 px-3.5 py-1.5 border border-maple-red/35 shadow-sm text-maple-light">
             <Flame className="h-4.5 w-4.5 fill-current animate-bounce" />
-            <span className="text-sm font-bold">3 Day Streak</span>
+            <span className="text-sm font-bold">{loginStreak} Day{loginStreak !== 1 ? 's' : ''} Streak</span>
           </div>
         </div>
       )}
@@ -113,7 +143,7 @@ export default function Navbar() {
       {/* Action Controls */}
       <div className="flex items-center space-x-4">
         {/* Notifications Tray */}
-        <div className="relative">
+        <div className="relative" ref={notificationsRef}>
           <button
             onClick={() => {
               setShowNotifications(!showNotifications);
@@ -183,7 +213,7 @@ export default function Navbar() {
         </div>
 
         {/* User Profile Menu */}
-        <div className="relative">
+        <div className="relative" ref={userDropdownRef}>
           <button
             onClick={() => {
               setShowUserDropdown(!showUserDropdown);
@@ -195,6 +225,10 @@ export default function Navbar() {
               src={profile.avatar_url || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=cist'}
               alt={profile.full_name}
               className="h-9 w-9 rounded-lg border border-navy-light/35 bg-white shadow-sm object-cover"
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=cist';
+              }}
             />
             <div className="hidden lg:block text-left">
               <span className="block text-xs font-bold text-white max-w-28 truncate">

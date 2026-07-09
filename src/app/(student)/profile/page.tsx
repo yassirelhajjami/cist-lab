@@ -8,7 +8,7 @@ import { getXpProgress } from '@/components/layout/Navbar';
 import { UserCircle, Mail, Hash, BookOpen, Award, Compass, Star, FileText } from 'lucide-react';
 
 export default function StudentProfilePage() {
-  const { student, profile } = useApp();
+  const { student, profile, loading: appLoading } = useApp();
   const [badges, setBadges] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [progress, setProgress] = useState<any[]>([]);
@@ -17,7 +17,11 @@ export default function StudentProfilePage() {
 
   useEffect(() => {
     async function loadProfileData() {
-      if (!student) return;
+      if (appLoading) return;
+      if (!student) {
+        setLoading(false);
+        return;
+      }
       try {
         const myBadges = await dbService.getStudentBadges(student.id);
         setBadges(myBadges);
@@ -40,12 +44,22 @@ export default function StudentProfilePage() {
       }
     }
     loadProfileData();
-  }, [student]);
+  }, [student, appLoading]);
 
-  if (loading || !profile || !student) {
+  if (loading || appLoading) {
     return (
       <div className="flex h-64 items-center justify-center text-slate-500">
         <div className="animate-spin rounded-full border-4 border-navy-deep border-t-transparent h-10 w-10"></div>
+      </div>
+    );
+  }
+
+  if (!profile || !student) {
+    return (
+      <div className="text-center py-20 bg-white rounded-xl border border-slate-200 p-8">
+        <div className="text-4xl">🏜️</div>
+        <h3 className="mt-4 text-sm font-bold text-slate-700">No Student Profile Found</h3>
+        <p className="text-xs text-slate-500 mt-1">Please log in with a student account to view this page.</p>
       </div>
     );
   }
@@ -74,7 +88,7 @@ export default function StudentProfilePage() {
         <div className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-6">
           <div className="text-center">
             <img
-              src={profile.avatar_url}
+              src={profile.avatar_url || undefined}
               alt={profile.full_name}
               className="h-24 w-24 rounded-2xl border-4 border-gold-accent shadow bg-slate-50 mx-auto object-cover"
             />

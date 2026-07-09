@@ -3,30 +3,25 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
+import { dbService } from '@/lib/db';
 import {
-  Gamepad2,
   Play,
+  Pause,
+  ChevronRight as StepIcon,
+  RotateCcw as ResetIcon,
+  FastForward as SpeedIcon,
+  Star as StarIcon,
   Award,
-  RotateCcw,
-  AlertTriangle,
-  HelpCircle,
-  Terminal,
-  RefreshCw,
-  Cpu,
-  Star,
-  ShieldCheck,
-  ChevronRight,
   Lock,
   CheckCircle2,
-  ArrowUp,
-  RotateCcw as RotateLeft,
-  RotateCw as RotateRight,
-  Eraser,
-  Trash2
+  Trash2,
+  Undo2,
+  Redo2,
+  BookOpen
 } from 'lucide-react';
 
 // =========================================================================
-// TYPES & CONTEXTS
+// DATA MODELS
 // =========================================================================
 interface Cell {
   color: 'gray' | 'red' | 'blue' | 'green' | 'white';
@@ -40,402 +35,515 @@ interface RobotState {
 }
 
 interface CommandSlot {
-  cmd: 'up' | 'ccw' | 'cw' | 'f1' | 'f2' | null;
+  cmd: 'up' | 'ccw' | 'cw' | 'f1' | 'f2' | 'paint_red' | 'paint_green' | 'paint_blue' | null;
   cond: 'none' | 'red' | 'blue' | 'green' | null;
 }
 
-interface LevelConfig {
+interface LevelDef {
   id: number;
   name: string;
   phase: number;
   rows: number;
   cols: number;
-  grid: Cell[][];
-  start: RobotState;
   desc: string;
-  allowedCmds: ('up' | 'ccw' | 'cw' | 'f1' | 'f2')[];
-  allowedConds: ('none' | 'red' | 'blue' | 'green')[];
+  start: RobotState;
+  stars: { r: number; c: number }[];
+  path: { r: number; c: number; color?: Cell['color'] }[];
   maxF1Slots: number;
   maxF2Slots: number;
+  minCmdsFor3Stars: number;
 }
 
-// Helper to make initial grids
-const createEmptyGrid = (rows: number, cols: number, color: Cell['color'] = 'gray'): Cell[][] => {
-  return Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, () => ({ color, hasStar: false }))
-  );
-};
-
 // =========================================================================
-// 9 PROGRESSIVE LEVELS CONFIGURATION
+// 21 HANDCRAFTED PROGRESSIVE LEVELS
 // =========================================================================
-const getLevelsConfig = (): LevelConfig[] => {
-  // --- PHASE 1 LEVELS (No functions, no conditions) ---
-  const lvl1: LevelConfig = {
+const LEVEL_DEFS: LevelDef[] = [
+  // --- PHASE 1: BASIC MOVEMENT (1 - 5) ---
+  {
     id: 1,
-    name: 'Level 1: Straight Pathway',
+    name: "Rookie Line",
     phase: 1,
-    rows: 5,
-    cols: 5,
-    grid: createEmptyGrid(5, 5, 'gray'),
-    start: { r: 2, c: 0, dir: 'E' },
-    desc: 'Sequence simple moves to drive the robot directly to the star. Stepping on gray crashes!',
-    allowedCmds: ['up'],
-    allowedConds: ['none'],
-    maxF1Slots: 5,
-    maxF2Slots: 0
-  };
-  // Path on row 2
-  for (let c = 0; c < 5; c++) lvl1.grid[2][c].color = 'white';
-  lvl1.grid[2][4].hasStar = true;
-
-  const lvl2: LevelConfig = {
-    id: 2,
-    name: 'Level 2: Corner Turning',
-    phase: 1,
-    rows: 5,
-    cols: 5,
-    grid: createEmptyGrid(5, 5, 'gray'),
-    start: { r: 4, c: 1, dir: 'N' },
-    desc: 'Turn corner directions carefully using Left or Right rotations to secure the star.',
-    allowedCmds: ['up', 'ccw', 'cw'],
-    allowedConds: ['none'],
+    rows: 15,
+    cols: 15,
+    desc: "Sequence simple moves to drive the robot directly to the star.",
+    start: { r: 7, c: 3, dir: 'E' },
+    stars: [{ r: 7, c: 11 }],
+    path: [
+      { r: 7, c: 3 }, { r: 7, c: 4 }, { r: 7, c: 5 }, { r: 7, c: 6 },
+      { r: 7, c: 7 }, { r: 7, c: 8 }, { r: 7, c: 9 }, { r: 7, c: 10 }, { r: 7, c: 11 }
+    ],
     maxF1Slots: 6,
-    maxF2Slots: 0
-  };
-  // Path L-shape
-  for (let r = 1; r <= 4; r++) lvl2.grid[r][1].color = 'white';
-  for (let c = 1; c <= 3; c++) lvl2.grid[1][c].color = 'white';
-  lvl2.grid[1][3].hasStar = true;
-
-  const lvl3: LevelConfig = {
-    id: 3,
-    name: 'Level 3: Multi-Star Path',
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 5
+  },
+  {
+    id: 2,
+    name: "Left Turn L-Path",
     phase: 1,
-    rows: 6,
-    cols: 6,
-    grid: createEmptyGrid(6, 6, 'gray'),
-    start: { r: 5, c: 1, dir: 'N' },
-    desc: 'Plan a sequence that drives the robot to collect both target stars on the path.',
-    allowedCmds: ['up', 'ccw', 'cw'],
-    allowedConds: ['none'],
+    rows: 15,
+    cols: 15,
+    desc: "Turn left at the corner to follow the path and claim the star.",
+    start: { r: 9, c: 5, dir: 'E' },
+    stars: [{ r: 4, c: 9 }],
+    path: [
+      { r: 9, c: 5 }, { r: 9, c: 6 }, { r: 9, c: 7 }, { r: 9, c: 8 }, { r: 9, c: 9 },
+      { r: 8, c: 9 }, { r: 7, c: 9 }, { r: 6, c: 9 }, { r: 5, c: 9 }, { r: 4, c: 9 }
+    ],
+    maxF1Slots: 7,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 6
+  },
+  {
+    id: 3,
+    name: "Right Turn L-Path",
+    phase: 1,
+    rows: 15,
+    cols: 15,
+    desc: "Follow the path, make a right turn, and grab the star.",
+    start: { r: 4, c: 4, dir: 'S' },
+    stars: [{ r: 9, c: 9 }],
+    path: [
+      { r: 4, c: 4 }, { r: 5, c: 4 }, { r: 6, c: 4 }, { r: 7, c: 4 }, { r: 8, c: 4 }, { r: 9, c: 4 },
+      { r: 9, c: 5 }, { r: 9, c: 6 }, { r: 9, c: 7 }, { r: 9, c: 8 }, { r: 9, c: 9 }
+    ],
     maxF1Slots: 8,
-    maxF2Slots: 0
-  };
-  // Zig-zag path
-  for (let r = 3; r <= 5; r++) lvl3.grid[r][1].color = 'white';
-  for (let c = 1; c <= 4; c++) lvl3.grid[3][c].color = 'white';
-  for (let r = 1; r <= 3; r++) lvl3.grid[r][4].color = 'white';
-  lvl3.grid[3][1].hasStar = true;
-  lvl3.grid[1][4].hasStar = true;
-
-
-  // --- PHASE 2 LEVELS (Functions enabled, no conditions) ---
-  const lvl4: LevelConfig = {
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 7
+  },
+  {
     id: 4,
-    name: 'Level 4: Repeating Staircase',
-    phase: 2,
-    rows: 6,
-    cols: 6,
-    grid: createEmptyGrid(6, 6, 'gray'),
-    start: { r: 5, c: 0, dir: 'E' },
-    desc: 'Use recursion! Setup F1 to perform a stair step, then call F1 to repeat it indefinitely.',
-    allowedCmds: ['up', 'ccw', 'cw', 'f1'],
-    allowedConds: ['none'],
-    maxF1Slots: 4,
-    maxF2Slots: 0
-  };
-  // Stair steps
-  lvl4.grid[5][0].color = 'white';
-  lvl4.grid[5][1].color = 'white'; lvl4.grid[5][1].hasStar = true;
-  lvl4.grid[4][1].color = 'white';
-  lvl4.grid[4][2].color = 'white'; lvl4.grid[4][2].hasStar = true;
-  lvl4.grid[3][2].color = 'white';
-  lvl4.grid[3][3].color = 'white'; lvl4.grid[3][3].hasStar = true;
-  lvl4.grid[2][3].color = 'white';
-  lvl4.grid[2][4].color = 'white'; lvl4.grid[2][4].hasStar = true;
-  lvl4.grid[1][4].color = 'white';
-  lvl4.grid[1][5].color = 'white'; lvl4.grid[1][5].hasStar = true;
-
-  const lvl5: LevelConfig = {
+    name: "The Rectangle Loop",
+    phase: 1,
+    rows: 15,
+    cols: 15,
+    desc: "Navigate around the rectangular path to collect all three corner stars.",
+    start: { r: 10, c: 4, dir: 'N' },
+    stars: [{ r: 4, c: 4 }, { r: 4, c: 10 }, { r: 10, c: 10 }],
+    path: [
+      { r: 4, c: 4 }, { r: 4, c: 5 }, { r: 4, c: 6 }, { r: 4, c: 7 }, { r: 4, c: 8 }, { r: 4, c: 9 }, { r: 4, c: 10 },
+      { r: 5, c: 10 }, { r: 6, c: 10 }, { r: 7, c: 10 }, { r: 8, c: 10 }, { r: 9, c: 10 }, { r: 10, c: 10 },
+      { r: 10, c: 9 }, { r: 10, c: 8 }, { r: 10, c: 7 }, { r: 10, c: 6 }, { r: 10, c: 5 }, { r: 10, c: 4 },
+      { r: 9, c: 4 }, { r: 8, c: 4 }, { r: 7, c: 4 }, { r: 6, c: 4 }, { r: 5, c: 4 }
+    ],
+    maxF1Slots: 10,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 10
+  },
+  {
     id: 5,
-    name: 'Level 5: Double Loop Bridge',
-    phase: 2,
-    rows: 6,
-    cols: 6,
-    grid: createEmptyGrid(6, 6, 'gray'),
-    start: { r: 4, c: 4, dir: 'W' },
-    desc: 'Write reusable code block helpers inside F1 and F2 to traverse the looping bridges.',
-    allowedCmds: ['up', 'ccw', 'cw', 'f1', 'f2'],
-    allowedConds: ['none'],
-    maxF1Slots: 4,
-    maxF2Slots: 4
-  };
-  // Walkway
-  for (let c = 1; c <= 4; c++) lvl5.grid[4][c].color = 'white';
-  for (let r = 2; r <= 4; r++) lvl5.grid[r][1].color = 'white';
-  for (let c = 1; c <= 4; c++) lvl5.grid[2][c].color = 'white';
-  lvl5.grid[4][1].hasStar = true;
-  lvl5.grid[2][1].hasStar = true;
-  lvl5.grid[2][4].hasStar = true;
+    name: "Zig-Zag Steps",
+    phase: 1,
+    rows: 15,
+    cols: 15,
+    desc: "Follow the steps of the zig-zag to collect three target stars.",
+    start: { r: 9, c: 3, dir: 'E' },
+    stars: [{ r: 9, c: 5 }, { r: 7, c: 7 }, { r: 5, c: 9 }],
+    path: [
+      { r: 9, c: 3 }, { r: 9, c: 4 }, { r: 9, c: 5 },
+      { r: 8, c: 5 }, { r: 7, c: 5 }, { r: 7, c: 6 }, { r: 7, c: 7 },
+      { r: 6, c: 7 }, { r: 5, c: 7 }, { r: 5, c: 8 }, { r: 5, c: 9 }
+    ],
+    maxF1Slots: 11,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 11
+  },
 
-  const lvl6: LevelConfig = {
+  // --- PHASE 2: COLOR CONDITIONS (6 - 10) ---
+  {
     id: 6,
-    name: 'Level 6: Spiral Maze',
+    name: "Alternating Colors",
     phase: 2,
-    rows: 6,
-    cols: 6,
-    grid: createEmptyGrid(6, 6, 'gray'),
-    start: { r: 5, c: 0, dir: 'E' },
-    desc: 'Program a recursive function that drives the robot along the spiral to collect the stars.',
-    allowedCmds: ['up', 'ccw', 'cw', 'f1'],
-    allowedConds: ['none'],
-    maxF1Slots: 5,
-    maxF2Slots: 0
-  };
-  for (let c = 0; c <= 5; c++) lvl6.grid[5][c].color = 'white';
-  for (let r = 0; r <= 4; r++) lvl6.grid[r][5].color = 'white';
-  for (let c = 0; c <= 4; c++) lvl6.grid[0][c].color = 'white';
-  lvl6.grid[5][5].hasStar = true;
-  lvl6.grid[0][5].hasStar = true;
-  lvl6.grid[0][0].hasStar = true;
-
-
-  // --- PHASE 3 LEVELS (Full conditions & color matching, matching screenshot) ---
-  const lvl7: LevelConfig = {
+    rows: 15,
+    cols: 15,
+    desc: "Collect stars using color conditional rules. Execute only when matching the cell color.",
+    start: { r: 7, c: 3, dir: 'E' },
+    stars: [{ r: 7, c: 7 }, { r: 7, c: 11 }],
+    path: [
+      { r: 7, c: 3, color: 'blue' }, { r: 7, c: 4, color: 'red' }, { r: 7, c: 5, color: 'blue' },
+      { r: 7, c: 6, color: 'red' }, { r: 7, c: 7, color: 'blue' }, { r: 7, c: 8, color: 'red' },
+      { r: 7, c: 9, color: 'blue' }, { r: 7, c: 10, color: 'red' }, { r: 7, c: 11, color: 'blue' }
+    ],
+    maxF1Slots: 6,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 5
+  },
+  {
     id: 7,
-    name: 'Level 7: The Square Loop',
+    name: "Red Corners",
+    phase: 2,
+    rows: 15,
+    cols: 15,
+    desc: "Make the robot turn only when it steps on a Red cell corner.",
+    start: { r: 8, c: 4, dir: 'N' },
+    stars: [{ r: 4, c: 8 }],
+    path: [
+      { r: 8, c: 4, color: 'blue' }, { r: 7, c: 4, color: 'blue' }, { r: 6, c: 4, color: 'blue' },
+      { r: 5, c: 4, color: 'blue' }, { r: 4, c: 4, color: 'red' }, // corner
+      { r: 4, c: 5, color: 'blue' }, { r: 4, c: 6, color: 'blue' }, { r: 4, c: 7, color: 'blue' },
+      { r: 4, c: 8, color: 'blue' }
+    ],
+    maxF1Slots: 4,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 3
+  },
+  {
+    id: 8,
+    name: "Green Checkpoints",
+    phase: 2,
+    rows: 15,
+    cols: 15,
+    desc: "Use Green cells as indicators to rotate CCW.",
+    start: { r: 9, c: 9, dir: 'W' },
+    stars: [{ r: 5, c: 5 }],
+    path: [
+      { r: 9, c: 9, color: 'blue' }, { r: 9, c: 8, color: 'blue' }, { r: 9, c: 7, color: 'blue' },
+      { r: 9, c: 6, color: 'blue' }, { r: 9, c: 5, color: 'green' }, // checkpoint
+      { r: 8, c: 5, color: 'blue' }, { r: 7, c: 5, color: 'blue' }, { r: 6, c: 5, color: 'blue' },
+      { r: 5, c: 5, color: 'blue' }
+    ],
+    maxF1Slots: 4,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 3
+  },
+  {
+    id: 9,
+    name: "Color Swapper",
+    phase: 2,
+    rows: 15,
+    cols: 15,
+    desc: "Navigate through multi-colored tiles. Turn right on Red, turn left on Green.",
+    start: { r: 9, c: 4, dir: 'N' },
+    stars: [{ r: 4, c: 9 }],
+    path: [
+      { r: 9, c: 4, color: 'blue' }, { r: 8, c: 4, color: 'blue' }, { r: 7, c: 4, color: 'blue' },
+      { r: 6, c: 4, color: 'red' }, // turn CW (East)
+      { r: 6, c: 5, color: 'blue' }, { r: 6, c: 6, color: 'blue' },
+      { r: 6, c: 7, color: 'green' }, // turn CCW (North)
+      { r: 5, c: 7, color: 'blue' }, { r: 4, c: 7, color: 'red' }, // turn CW (East)
+      { r: 4, c: 8, color: 'blue' }, { r: 4, c: 9, color: 'blue' }
+    ],
+    maxF1Slots: 6,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 4
+  },
+  {
+    id: 10,
+    name: "Blue Triggers",
+    phase: 2,
+    rows: 15,
+    cols: 15,
+    desc: "Deduce color conditions using Blue triggers to guide the robot safely through a small maze.",
+    start: { r: 10, c: 3, dir: 'E' },
+    stars: [{ r: 6, c: 9 }],
+    path: [
+      { r: 10, c: 3, color: 'white' }, { r: 10, c: 4, color: 'white' }, { r: 10, c: 5, color: 'blue' }, // Turn left
+      { r: 9, c: 5, color: 'white' }, { r: 8, c: 5, color: 'green' }, // Turn right
+      { r: 8, c: 6, color: 'white' }, { r: 8, c: 7, color: 'white' }, { r: 8, c: 8, color: 'blue' }, // Turn left
+      { r: 7, c: 8, color: 'white' }, { r: 6, c: 8, color: 'green' }, // Turn right
+      { r: 6, c: 9, color: 'white' }
+    ],
+    maxF1Slots: 8,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 6
+  },
+
+  // --- PHASE 3: FUNCTIONS & LOOPS (11 - 15) ---
+  {
+    id: 11,
+    name: "Repeating Stairs",
     phase: 3,
+    rows: 15,
+    cols: 15,
+    desc: "Use recursion! Setup F1 to perform a stair step and call F1 recursively.",
+    start: { r: 10, c: 2, dir: 'E' },
+    stars: [{ r: 10, c: 4 }, { r: 8, c: 6 }, { r: 6, c: 8 }],
+    path: [
+      { r: 10, c: 2 }, { r: 10, c: 3 }, { r: 10, c: 4 },
+      { r: 9, c: 4 }, { r: 8, c: 4 }, { r: 8, c: 5 }, { r: 8, c: 6 },
+      { r: 7, c: 6 }, { r: 6, c: 6 }, { r: 6, c: 7 }, { r: 6, c: 8 }
+    ],
+    maxF1Slots: 5,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 5
+  },
+  {
+    id: 12,
+    name: "Symmetric Bridges",
+    phase: 3,
+    rows: 15,
+    cols: 15,
+    desc: "Define F1 and F2 to alternate calling each other to solve a symmetric layout.",
+    start: { r: 7, c: 2, dir: 'E' },
+    stars: [{ r: 7, c: 5 }, { r: 7, c: 9 }, { r: 7, c: 12 }],
+    path: [
+      { r: 7, c: 2 }, { r: 7, c: 3 }, { r: 7, c: 4 }, { r: 7, c: 5 },
+      { r: 7, c: 6 }, { r: 7, c: 7 }, { r: 7, c: 8 }, { r: 7, c: 9 },
+      { r: 7, c: 10 }, { r: 7, c: 11 }, { r: 7, c: 12 }
+    ],
+    maxF1Slots: 4,
+    maxF2Slots: 4,
+    minCmdsFor3Stars: 4
+  },
+  {
+    id: 13,
+    name: "The S-Curve Loop",
+    phase: 3,
+    rows: 15,
+    cols: 15,
+    desc: "Loop F1 recursively with turn commands to steer through a smooth S-curve.",
+    start: { r: 9, c: 3, dir: 'E' },
+    stars: [{ r: 9, c: 6 }, { r: 5, c: 8 }],
+    path: [
+      { r: 9, c: 3 }, { r: 9, c: 4 }, { r: 9, c: 5 }, { r: 9, c: 6 },
+      { r: 8, c: 6 }, { r: 7, c: 6 }, { r: 7, c: 7 }, { r: 7, c: 8 },
+      { r: 6, c: 8 }, { r: 5, c: 8 }, { r: 5, c: 9 }, { r: 5, c: 10 }
+    ],
+    maxF1Slots: 6,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 5
+  },
+  {
+    id: 14,
+    name: "Infinite Loop Track",
+    phase: 3,
+    rows: 15,
+    cols: 15,
+    desc: "A closed circular track. Write a looping function to keep the robot driving.",
+    start: { r: 8, c: 4, dir: 'N' },
+    stars: [{ r: 4, c: 4 }, { r: 4, c: 10 }, { r: 10, c: 10 }, { r: 10, c: 4 }],
+    path: [
+      { r: 4, c: 4 }, { r: 4, c: 5 }, { r: 4, c: 6 }, { r: 4, c: 7 }, { r: 4, c: 8 }, { r: 4, c: 9 }, { r: 4, c: 10 },
+      { r: 5, c: 10 }, { r: 6, c: 10 }, { r: 7, c: 10 }, { r: 8, c: 10 }, { r: 9, c: 10 }, { r: 10, c: 10 },
+      { r: 10, c: 9 }, { r: 10, c: 8 }, { r: 10, c: 7 }, { r: 10, c: 6 }, { r: 10, c: 5 }, { r: 10, c: 4 },
+      { r: 9, c: 4 }, { r: 8, c: 4 }, { r: 7, c: 4 }, { r: 6, c: 4 }, { r: 5, c: 4 }
+    ],
+    maxF1Slots: 5,
+    maxF2Slots: 0,
+    minCmdsFor3Stars: 4
+  },
+  {
+    id: 15,
+    name: "Crossroad Bridge",
+    phase: 3,
+    rows: 15,
+    cols: 15,
+    desc: "Cross the bridge! Use F1 and F2 to manage different directions.",
+    start: { r: 7, c: 2, dir: 'E' },
+    stars: [{ r: 7, c: 7 }, { r: 5, c: 7 }, { r: 9, c: 7 }],
+    path: [
+      { r: 7, c: 2 }, { r: 7, c: 3 }, { r: 7, c: 4 }, { r: 7, c: 5 }, { r: 7, c: 6 }, { r: 7, c: 7 }, { r: 7, c: 8 }, { r: 7, c: 9 },
+      { r: 5, c: 7 }, { r: 6, c: 7 }, { r: 8, c: 7 }, { r: 9, c: 7 }
+    ],
+    maxF1Slots: 6,
+    maxF2Slots: 6,
+    minCmdsFor3Stars: 6
+  },
+
+  // --- PHASE 4: ADVANCED LOGIC (16 - 18) ---
+  {
+    id: 16,
+    name: "Nested Spiral Path",
+    phase: 4,
+    rows: 16,
+    cols: 16,
+    desc: "Deeply nested recursion is required to guide the robot into the center star.",
+    start: { r: 12, c: 2, dir: 'E' },
+    stars: [{ r: 6, c: 8 }],
+    path: [
+      { r: 12, c: 2 }, { r: 12, c: 3 }, { r: 12, c: 4 }, { r: 12, c: 5 }, { r: 12, c: 6 }, { r: 12, c: 7 }, { r: 12, c: 8 }, { r: 12, c: 9 }, { r: 12, c: 10 }, { r: 12, c: 11 }, { r: 12, c: 12 },
+      { r: 11, c: 12 }, { r: 10, c: 12 }, { r: 9, c: 12 }, { r: 8, c: 12 }, { r: 7, c: 12 }, { r: 6, c: 12 }, { r: 5, c: 12 }, { r: 4, c: 12 },
+      { r: 4, c: 11 }, { r: 4, c: 10 }, { r: 4, c: 9 }, { r: 4, c: 8 }, { r: 4, c: 7 }, { r: 4, c: 6 }, { r: 4, c: 5 }, { r: 4, c: 4 },
+      { r: 5, c: 4 }, { r: 6, c: 4 }, { r: 7, c: 4 }, { r: 8, c: 4 }, { r: 9, c: 4 }, { r: 10, c: 4 },
+      { r: 10, c: 5 }, { r: 10, c: 6 }, { r: 10, c: 7 }, { r: 10, c: 8 }, { r: 10, c: 9 }, { r: 10, c: 10 },
+      { r: 9, c: 10 }, { r: 8, c: 10 }, { r: 7, c: 10 }, { r: 6, c: 10 },
+      { r: 6, c: 9 }, { r: 6, c: 8 }
+    ],
+    maxF1Slots: 5,
+    maxF2Slots: 5,
+    minCmdsFor3Stars: 6
+  },
+  {
+    id: 17,
+    name: "Recursive Spiral",
+    phase: 4,
+    rows: 16,
+    cols: 16,
+    desc: "Alternate functions to solve recursion transitions over a narrow bridge.",
+    start: { r: 8, c: 2, dir: 'E' },
+    stars: [{ r: 8, c: 13 }],
+    path: [
+      { r: 8, c: 2 }, { r: 8, c: 3 }, { r: 8, c: 4 }, { r: 8, c: 5 }, { r: 8, c: 6 }, { r: 8, c: 7 },
+      { r: 8, c: 8 }, { r: 8, c: 9 }, { r: 8, c: 10 }, { r: 8, c: 11 }, { r: 8, c: 12 }, { r: 8, c: 13 }
+    ],
+    maxF1Slots: 4,
+    maxF2Slots: 4,
+    minCmdsFor3Stars: 4
+  },
+  {
+    id: 18,
+    name: "The Stack Climber",
+    phase: 4,
+    rows: 16,
+    cols: 16,
+    desc: "Solve a step-like maze. Limit commands to optimize memory stack usage.",
+    start: { r: 13, c: 3, dir: 'E' },
+    stars: [{ r: 3, c: 13 }],
+    path: [
+      { r: 13, c: 3 }, { r: 13, c: 4 }, { r: 13, c: 5 },
+      { r: 12, c: 5 }, { r: 11, c: 5 }, { r: 11, c: 6 }, { r: 11, c: 7 },
+      { r: 10, c: 7 }, { r: 9, c: 7 }, { r: 9, c: 8 }, { r: 9, c: 9 },
+      { r: 8, c: 9 }, { r: 7, c: 9 }, { r: 7, c: 10 }, { r: 7, c: 11 },
+      { r: 6, c: 11 }, { r: 5, c: 11 }, { r: 5, c: 12 }, { r: 5, c: 13 },
+      { r: 4, c: 13 }, { r: 3, c: 13 }
+    ],
+    maxF1Slots: 6,
+    maxF2Slots: 6,
+    minCmdsFor3Stars: 6
+  },
+
+  // --- PHASE 5: EXPERT PUZZLES (19 - 21) ---
+  {
+    id: 19,
+    name: "The Square Loop",
+    phase: 5,
     rows: 12,
     cols: 12,
-    grid: createEmptyGrid(12, 12, 'gray'),
+    desc: "REPLICA PUZZLE: Replicate the screen! Red edges, Green corners, and a tail. Program F1/F2 conditionally.",
     start: { r: 9, c: 3, dir: 'N' },
-    desc: 'Match your program to the visual grid! Use Green condition blocks to turn on green stars, Red for paths, and secure all 5 stars.',
-    allowedCmds: ['up', 'ccw', 'cw', 'f1', 'f2'],
-    allowedConds: ['none', 'red', 'green'],
-    maxF1Slots: 4,
-    maxF2Slots: 4
-  };
-  // Grid layout from image:
-  // Corners at:
-  // Top-Left: [2, 3] -> Green, Star
-  lvl7.grid[2][3] = { color: 'green', hasStar: true };
-  // Top-Right: [2, 10] -> Green, Star
-  lvl7.grid[2][10] = { color: 'green', hasStar: true };
-  // Bottom-Right: [9, 10] -> Green, Star
-  lvl7.grid[9][10] = { color: 'green', hasStar: true };
-  // Bottom-Left: [9, 3] -> Green, Star (robot starts here)
-  lvl7.grid[9][3] = { color: 'green', hasStar: true };
-
-  // Tail:
-  // [9, 2] -> Red, no star
-  lvl7.grid[9][2] = { color: 'red', hasStar: false };
-  // [9, 1] -> Green, Star
-  lvl7.grid[9][1] = { color: 'green', hasStar: true };
-
-  // Edges connecting them (all red):
-  for (let r = 3; r <= 8; r++) {
-    lvl7.grid[r][3] = { color: 'red', hasStar: false };
-    lvl7.grid[r][10] = { color: 'red', hasStar: false };
-  }
-  for (let c = 4; c <= 9; c++) {
-    lvl7.grid[2][c] = { color: 'red', hasStar: false };
-    lvl7.grid[9][c] = { color: 'red', hasStar: false };
-  }
-
-  const lvl8: LevelConfig = {
-    id: 8,
-    name: 'Level 8: Alternating Colors',
-    phase: 3,
-    rows: 8,
-    cols: 8,
-    grid: createEmptyGrid(8, 8, 'gray'),
-    start: { r: 5, c: 1, dir: 'E' },
-    desc: 'Use Blue/Red conditions to separate turning directives on alternating color bands.',
-    allowedCmds: ['up', 'ccw', 'cw', 'f1'],
-    allowedConds: ['none', 'red', 'blue'],
+    stars: [
+      { r: 2, c: 3 }, { r: 2, c: 10 }, { r: 9, c: 10 }, { r: 9, c: 3 }, { r: 9, c: 1 }
+    ],
+    path: [
+      // Corners
+      { r: 2, c: 3, color: 'green' },
+      { r: 2, c: 10, color: 'green' },
+      { r: 9, c: 10, color: 'green' },
+      { r: 9, c: 3, color: 'green' },
+      // Tail
+      { r: 9, c: 2, color: 'red' },
+      { r: 9, c: 1, color: 'green' },
+      // Connecting Red edges
+      { r: 3, c: 3, color: 'red' }, { r: 4, c: 3, color: 'red' }, { r: 5, c: 3, color: 'red' },
+      { r: 6, c: 3, color: 'red' }, { r: 7, c: 3, color: 'red' }, { r: 8, c: 3, color: 'red' },
+      { r: 3, c: 10, color: 'red' }, { r: 4, c: 10, color: 'red' }, { r: 5, c: 10, color: 'red' },
+      { r: 6, c: 10, color: 'red' }, { r: 7, c: 10, color: 'red' }, { r: 8, c: 10, color: 'red' },
+      { r: 2, c: 4, color: 'red' }, { r: 2, c: 5, color: 'red' }, { r: 2, c: 6, color: 'red' },
+      { r: 2, c: 7, color: 'red' }, { r: 2, c: 8, color: 'red' }, { r: 2, c: 9, color: 'red' },
+      { r: 9, c: 4, color: 'red' }, { r: 9, c: 5, color: 'red' }, { r: 9, c: 6, color: 'red' },
+      { r: 9, c: 7, color: 'red' }, { r: 9, c: 8, color: 'red' }, { r: 9, c: 9, color: 'red' }
+    ],
     maxF1Slots: 5,
-    maxF2Slots: 0
-  };
-  for (let c = 1; c <= 6; c++) {
-    lvl8.grid[5][c] = {
-      color: c % 2 === 0 ? 'red' : 'blue',
-      hasStar: false
-    };
-  }
-  lvl8.grid[5][3].hasStar = true;
-  lvl8.grid[5][6].hasStar = true;
-
-  const lvl9: LevelConfig = {
-    id: 9,
-    name: 'Level 9: RGB Color Collector',
-    phase: 3,
-    rows: 8,
-    cols: 8,
-    grid: createEmptyGrid(8, 8, 'gray'),
-    start: { r: 6, c: 2, dir: 'N' },
-    desc: 'Master the ultimate color-coded path. Combine Red, Blue, and Green conditions for full loops.',
-    allowedCmds: ['up', 'ccw', 'cw', 'f1', 'f2'],
-    allowedConds: ['none', 'red', 'blue', 'green'],
+    maxF2Slots: 5,
+    minCmdsFor3Stars: 4
+  },
+  {
+    id: 20,
+    name: "Color Painter Loop",
+    phase: 5,
+    rows: 15,
+    cols: 15,
+    desc: "Use Paint commands (Paint Red/Green/Blue) to color grid cells and direct the robot recursively.",
+    start: { r: 8, c: 4, dir: 'E' },
+    stars: [{ r: 8, c: 10 }],
+    path: [
+      { r: 8, c: 4, color: 'white' }, { r: 8, c: 5, color: 'white' }, { r: 8, c: 6, color: 'white' },
+      { r: 8, c: 7, color: 'white' }, { r: 8, c: 8, color: 'white' }, { r: 8, c: 9, color: 'white' },
+      { r: 8, c: 10, color: 'white' }
+    ],
     maxF1Slots: 6,
-    maxF2Slots: 6
-  };
-  // Path
-  for (let r = 2; r <= 6; r++) {
-    lvl9.grid[r][2] = { color: r % 2 === 0 ? 'red' : 'blue', hasStar: r === 2 };
-    lvl9.grid[r][5] = { color: r % 2 === 0 ? 'green' : 'blue', hasStar: r === 6 };
+    maxF2Slots: 6,
+    minCmdsFor3Stars: 5
+  },
+  {
+    id: 21,
+    name: "The Ultimate Logic Maze",
+    phase: 5,
+    rows: 15,
+    cols: 15,
+    desc: "Solve this massive 15x15 maze. Combine functions and color painting to fit the constraints.",
+    start: { r: 10, c: 4, dir: 'N' },
+    stars: [{ r: 4, c: 10 }],
+    path: [
+      { r: 10, c: 4, color: 'red' }, { r: 9, c: 4, color: 'red' }, { r: 8, c: 4, color: 'red' },
+      { r: 8, c: 5, color: 'blue' }, { r: 8, c: 6, color: 'blue' },
+      { r: 7, c: 6, color: 'green' }, { r: 6, c: 6, color: 'green' },
+      { r: 6, c: 7, color: 'red' }, { r: 6, c: 8, color: 'red' },
+      { r: 5, c: 8, color: 'blue' }, { r: 4, c: 8, color: 'blue' },
+      { r: 4, c: 9, color: 'green' }, { r: 4, c: 10, color: 'green' }
+    ],
+    maxF1Slots: 8,
+    maxF2Slots: 8,
+    minCmdsFor3Stars: 6
   }
-  for (let c = 3; c <= 4; c++) {
-    lvl9.grid[2][c] = { color: 'green', hasStar: false };
-    lvl9.grid[6][c] = { color: 'red', hasStar: false };
-  }
+];
 
-  return [lvl1, lvl2, lvl3, lvl4, lvl5, lvl6, lvl7, lvl8, lvl9];
-};
-
-// =========================================================================
-// QUIZZES FOR THE END OF PHASES
-// =========================================================================
-interface Question {
-  q: string;
-  options: string[];
-  correct: number;
-}
-
-const PHASE_QUIZZES: Record<number, Question[]> = {
-  1: [
-    {
-      q: "If a robot is facing North and executes 'Turn Right' followed by 'Turn Right', what direction is it facing?",
-      options: ["East", "South", "West", "North"],
-      correct: 1
-    },
-    {
-      q: "A robot starts at row 0, column 0 facing East and moves Forward 3 times. What is its new position?",
-      options: ["[0, 3]", "[3, 0]", "[3, 3]", "[0, 0]"],
-      correct: 0
-    },
-    {
-      q: "If a grid pathway has a brick wall (gray cell) at cell [2,2], what happens when the robot attempts to move forward into it?",
-      options: [
-        "It turns automatically to avoid it",
-        "It crashes and the execution stops",
-        "It jumps over the wall to next tile",
-        "It waits for user to enter another code"
-      ],
-      correct: 1
-    }
-  ],
-  2: [
-    {
-      q: "In algorithmic logic games like this, what is recursion?",
-      options: [
-        "A function that calls itself to repeat a sequence",
-        "A loops that terminates instantly",
-        "A syntax syntax check compilation error",
-        "A database query command"
-      ],
-      correct: 0
-    },
-    {
-      q: "If function F1 calls F2, and F2 recursively calls F1 without any conditional exit, what will happen?",
-      options: [
-        "The program executes normally and loops 10 times",
-        "The robot moves twice as fast to the target",
-        "A stack overflow / infinite loop crash will occur",
-        "The web browser tab closes automatically"
-      ],
-      correct: 2
-    },
-    {
-      q: "If F1 contains: [Forward, F1] and we run the code. What does it represent?",
-      options: [
-        "An infinite loop moving the robot forward continually",
-        "Moving forward exactly once",
-        "A syntax function call error",
-        "A simple turning sequence"
-      ],
-      correct: 0
-    }
-  ],
-  3: [
-    {
-      q: "How do color conditions help the robot navigate complex loops?",
-      options: [
-        "They allow executing actions only when standing on a matching colored cell",
-        "They speed up the robot's movement automatically",
-        "They modify the styling of the webpage",
-        "They award extra CIST coins"
-      ],
-      correct: 0
-    },
-    {
-      q: "If F1 contains: [If Red: turnRight, If Green: turnLeft, Forward]. What happens on a Blue cell?",
-      options: [
-        "The robot turns left",
-        "The robot turns right",
-        "The robot moves forward without turning",
-        "The robot crashes immediately"
-      ],
-      correct: 2
-    },
-    {
-      q: "If F1 contains: [If Green: F2, Forward] and F2 contains [turnLeft]. What does the robot do on a Green cell?",
-      options: [
-        "Turns left and then moves forward",
-        "Only moves forward",
-        "Only turns left",
-        "Crashes"
-      ],
-      correct: 0
-    }
-  ]
-};
-
-// =========================================================================
-// MAIN COMPONENT EXPORT
-// =========================================================================
 export default function LogicArena() {
   const { addXpAndCoins } = useApp();
-  const allLevels = getLevelsConfig();
 
-  // Load progress state from localStorage
+  // Loader & Level Index States
   const [activeTab, setActiveTab] = useState<'games' | 'test'>('games');
   const [activePhase, setActivePhase] = useState<number>(1);
   const [selectedLevelIdx, setSelectedLevelIdx] = useState<number>(0);
   
   const [completedLevels, setCompletedLevels] = useState<number[]>([]);
+  const [levelStarsMap, setLevelStarsMap] = useState<Record<number, number>>({});
   const [unlockedPhases, setUnlockedPhases] = useState<number[]>([1]);
 
+  // Load progress state from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedLevels = localStorage.getItem('cist_logic_levels');
-      const savedPhases = localStorage.getItem('cist_logic_phases');
+      const savedLevels = localStorage.getItem('cist_logic_levels_21');
+      const savedStars = localStorage.getItem('cist_logic_stars_21');
+      const savedPhases = localStorage.getItem('cist_logic_phases_21');
       if (savedLevels) setCompletedLevels(JSON.parse(savedLevels));
+      if (savedStars) setLevelStarsMap(JSON.parse(savedStars));
       if (savedPhases) setUnlockedPhases(JSON.parse(savedPhases));
     }
   }, []);
 
-  const saveProgress = (levels: number[], phases: number[]) => {
+  const saveProgress = (levels: number[], phases: number[], starsMap: Record<number, number>) => {
     setCompletedLevels(levels);
     setUnlockedPhases(phases);
-    localStorage.setItem('cist_logic_levels', JSON.stringify(levels));
-    localStorage.setItem('cist_logic_phases', JSON.stringify(phases));
+    setLevelStarsMap(starsMap);
+    localStorage.setItem('cist_logic_levels_21', JSON.stringify(levels));
+    localStorage.setItem('cist_logic_stars_21', JSON.stringify(starsMap));
+    localStorage.setItem('cist_logic_phases_21', JSON.stringify(phases));
   };
 
-  const activeLevel = allLevels[selectedLevelIdx];
+  const activeLevel = LEVEL_DEFS[selectedLevelIdx];
 
   // Game execution state variables
   const [gridState, setGridState] = useState<Cell[][]>([]);
   const [robot, setRobot] = useState<RobotState>({ r: 0, c: 0, dir: 'E' });
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [hasWon, setHasWon] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
-  const [executionHistory, setExecutionHistory] = useState<string[]>([]);
+  const [executionHistory, setExecutionHistory] = useState<{ cmd: CommandSlot['cmd']; cond: CommandSlot['cond']; id: string }[]>([]);
+  const [activeHistIdx, setActiveHistIdx] = useState<number>(-1);
+  const [executionSpeed, setExecutionSpeed] = useState<number>(350); // Speed in ms
 
-  // Function Slot Builders
+  // Function Slot Builders & History for Undo/Redo
   const [f1, setF1] = useState<CommandSlot[]>([]);
   const [f2, setF2] = useState<CommandSlot[]>([]);
-  const [activeSlot, setActiveSlot] = useState<{ fn: 'f1' | 'f2'; index: number } | null>(null);
+  const [undoStack, setUndoStack] = useState<{ f1: CommandSlot[]; f2: CommandSlot[] }[]>([]);
+  const [redoStack, setRedoStack] = useState<{ f1: CommandSlot[]; f2: CommandSlot[] }[]>([]);
+  
+  // Drag and Palette selectors
+  const [selectedPaletteItem, setSelectedPaletteItem] = useState<{ type: 'cmd' | 'cond' | 'brush' | 'eraser'; name: string } | null>(null);
+
+  // Runtime State pointers for step-by-step
+  const [runtimeStack, setRuntimeStack] = useState<{ fn: 'f1' | 'f2'; ip: number }[]>([]);
+  const [runtimeRobot, setRuntimeRobot] = useState<RobotState>({ r: 0, c: 0, dir: 'E' });
+  const [runtimeGrid, setRuntimeGrid] = useState<Cell[][]>([]);
+  const [starsLeft, setStarsLeft] = useState<number>(0);
+  const [stepCount, setStepCount] = useState<number>(0);
+
+  // Level Editor Mode
+  const [isEditorMode, setIsEditorMode] = useState(false);
+  const [editorPaintColor, setEditorPaintColor] = useState<Cell['color']>('white');
+  const [editorStarToggle, setEditorStarToggle] = useState(false);
+  const [editorRobotPlacement, setEditorRobotPlacement] = useState(false);
 
   // Quiz state variables
   const [quizIdx, setQuizIdx] = useState(0);
@@ -444,280 +552,441 @@ export default function LogicArena() {
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [quizError, setQuizError] = useState(false);
 
-  // Notification Alerts
+  // Alerts
   const [alertMsg, setAlertMsg] = useState('');
 
-  // Set the current level
+  // Initial Level Setup
   useEffect(() => {
     resetLevelState(activeLevel);
   }, [selectedLevelIdx]);
 
-  const resetLevelState = (lvl: LevelConfig) => {
-    // Deep copy grid
-    const copyGrid: Cell[][] = lvl.grid.map(row => row.map(cell => ({ ...cell })));
-    setGridState(copyGrid);
+  const resetLevelState = (lvl: LevelDef) => {
+    // Generate Grid based on Level Config
+    const tempGrid = createEmptyGrid(lvl.rows, lvl.cols, 'gray');
+    
+    // Draw Path
+    lvl.path.forEach(p => {
+      tempGrid[p.r][p.c].color = p.color || 'white';
+    });
+
+    // Place Stars
+    lvl.stars.forEach(s => {
+      tempGrid[s.r][s.c].hasStar = true;
+    });
+
+    setGridState(tempGrid);
     setRobot({ ...lvl.start });
     setIsPlaying(false);
+    setIsPaused(false);
     setHasWon(false);
-    setTerminalLogs([`Simulated grid initialized for "${lvl.name}". ready.`]);
+    setTerminalLogs([`Level ${lvl.id}: ${lvl.name} initialized. Drag/click to place commands.`]);
     setExecutionHistory([]);
-    setActiveSlot(null);
+    setActiveHistIdx(-1);
+    setRuntimeStack([]);
+    setStepCount(0);
+    setUndoStack([]);
+    setRedoStack([]);
 
-    // Reset functions with blank slots
+    // Fill blank slots
     setF1(Array.from({ length: lvl.maxF1Slots }, () => ({ cmd: null, cond: 'none' })));
     setF2(Array.from({ length: lvl.maxF2Slots }, () => ({ cmd: null, cond: 'none' })));
   };
 
-  // Timer Ref
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Clean up timers
+  // Keyboard Shortcuts Listener
   useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (activeTab === 'test') return;
+      
+      const key = e.key.toLowerCase();
+      if (key === ' ') {
+        e.preventDefault();
+        if (isPlaying) {
+          setIsPaused(prev => !prev);
+        } else {
+          handlePlay();
+        }
+      } else if (key === 's') {
+        handleStep();
+      } else if (key === 'r') {
+        handleReset();
+      } else if (e.ctrlKey && key === 'z') {
+        e.preventDefault();
+        handleUndo();
+      } else if (e.ctrlKey && key === 'y') {
+        e.preventDefault();
+        handleRedo();
+      } else if (key === 'escape') {
+        setSelectedPaletteItem(null);
+      }
     };
-  }, []);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPlaying, isPaused, f1, f2, undoStack, redoStack]);
 
   const triggerAlert = (msg: string) => {
     setAlertMsg(msg);
     setTimeout(() => setAlertMsg(''), 5500);
   };
 
-  // =========================================================================
-  // ROBOZZLE PUZZLE RUNTIME ENGINE
-  // =========================================================================
-  const handleRunExecution = () => {
-    if (isPlaying || hasWon) return;
+  // Push slot states into Undo Stack before modification
+  const recordUndoState = (newF1 = f1, newF2 = f2) => {
+    setUndoStack(prev => [...prev, { f1: f1.map(s => ({ ...s })), f2: f2.map(s => ({ ...s })) }]);
+    setRedoStack([]); // Clear redo
+  };
 
-    // Check if F1 has any instruction
-    const f1HasCmds = f1.some(slot => slot.cmd !== null);
-    if (!f1HasCmds) {
-      setTerminalLogs(prev => [...prev, '❌ ERROR: F1 is empty. Robot execution must start at F1.']);
+  const handleUndo = () => {
+    if (undoStack.length === 0 || isPlaying) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [...prev, { f1: f1.map(s => ({ ...s })), f2: f2.map(s => ({ ...s })) }]);
+    setF1(previous.f1);
+    setF2(previous.f2);
+  };
+
+  const handleRedo = () => {
+    if (redoStack.length === 0 || isPlaying) return;
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+    setUndoStack(prev => [...prev, { f1: f1.map(s => ({ ...s })), f2: f2.map(s => ({ ...s })) }]);
+    setF1(next.f1);
+    setF2(next.f2);
+  };
+
+  // =========================================================================
+  // PALETTE & SLOT MANAGEMENT (HTML5 DND & CLICK-TO-PLACE)
+  // =========================================================================
+  const handleDragStart = (e: React.DragEvent, type: 'cmd' | 'cond' | 'brush' | 'eraser', name: string) => {
+    e.dataTransfer.setData('type', type);
+    e.dataTransfer.setData('name', name);
+    setSelectedPaletteItem({ type, name });
+  };
+
+  const handleDropOnSlot = (e: React.DragEvent, fnName: 'f1' | 'f2', idx: number) => {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('type') as 'cmd' | 'cond' | 'brush' | 'eraser';
+    const name = e.dataTransfer.getData('name');
+    applyModification(fnName, idx, type, name);
+  };
+
+  const handleSlotClick = (fnName: 'f1' | 'f2', idx: number) => {
+    if (isPlaying) return;
+    if (selectedPaletteItem) {
+      applyModification(fnName, idx, selectedPaletteItem.type, selectedPaletteItem.name);
+    } else {
+      // If nothing selected, clicking clear it
+      recordUndoState();
+      const slots = fnName === 'f1' ? [...f1] : [...f2];
+      slots[idx] = { cmd: null, cond: 'none' };
+      if (fnName === 'f1') setF1(slots);
+      else setF2(slots);
+    }
+  };
+
+  const applyModification = (fnName: 'f1' | 'f2', idx: number, type: string, name: string) => {
+    recordUndoState();
+    const slots = fnName === 'f1' ? [...f1] : [...f2];
+
+    if (type === 'cmd') {
+      slots[idx] = { ...slots[idx], cmd: name as CommandSlot['cmd'] };
+    } else if (type === 'cond') {
+      slots[idx] = { ...slots[idx], cond: name as CommandSlot['cond'] };
+    } else if (type === 'brush') {
+      // Translate brush to paint commands
+      const paintCmd = name === 'red' ? 'paint_red' : name === 'green' ? 'paint_green' : 'paint_blue';
+      slots[idx] = { ...slots[idx], cmd: paintCmd as CommandSlot['cmd'] };
+    } else if (type === 'eraser') {
+      slots[idx] = { cmd: null, cond: 'none' };
+    }
+
+    if (fnName === 'f1') setF1(slots);
+    else setF2(slots);
+  };
+
+  const clearAllSlots = () => {
+    if (isPlaying) return;
+    recordUndoState();
+    setF1(f1.map(() => ({ cmd: null, cond: 'none' })));
+    setF2(f2.map(() => ({ cmd: null, cond: 'none' })));
+    setTerminalLogs(prev => [...prev, '✓ Function slots cleared.']);
+  };
+
+  // =========================================================================
+  // ROBOZZLE GRID INTERPRETATION ENGINE
+  // =========================================================================
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startPlayback = () => {
+    setIsPlaying(true);
+    setIsPaused(false);
+    setHasWon(false);
+    setExecutionHistory([]);
+    setActiveHistIdx(-1);
+
+    // Deep copy initial states
+    const copyGrid = gridState.map(row => row.map(cell => ({ ...cell })));
+    const initialRobot = { ...robot };
+    const starsCount = copyGrid.flat().filter(c => c.hasStar).length;
+
+    setRuntimeGrid(copyGrid);
+    setRuntimeRobot(initialRobot);
+    setStarsLeft(starsCount);
+    setStepCount(0);
+
+    const initialStack: { fn: 'f1' | 'f2'; ip: number }[] = [{ fn: 'f1', ip: 0 }];
+    setRuntimeStack(initialStack);
+    setTerminalLogs(prev => [...prev, '> Starting sequence execution. starting at F1...']);
+  };
+
+  const handlePlay = () => {
+    if (!isPlaying) {
+      // Validate F1 is not completely empty
+      if (f1.every(s => s.cmd === null)) {
+        setTerminalLogs(prev => [...prev, '❌ ERROR: F1 has no commands. Can\'t play.']);
+        return;
+      }
+      startPlayback();
+    } else {
+      setIsPaused(false);
+    }
+  };
+
+  // Execute Step-by-Step
+  const handleStep = () => {
+    if (!isPlaying) {
+      if (f1.every(s => s.cmd === null)) return;
+      startPlayback();
+      setIsPaused(true);
+    } else {
+      setIsPaused(true);
+      executeOneInstruction();
+    }
+  };
+
+  // Main step executor loop
+  const executeOneInstruction = () => {
+    if (runtimeStack.length === 0) {
+      if (starsLeft === 0) {
+        handleWinLevel();
+      } else {
+        setTerminalLogs(prev => [...prev, '❌ HALT: Call stack is empty. Star targets remaining.']);
+        setIsPlaying(false);
+      }
       return;
     }
 
-    setIsPlaying(true);
-    setHasWon(false);
-    setExecutionHistory([]);
-    setTerminalLogs(prev => [...prev, '> Spawning execution thread starting at F1...']);
+    if (stepCount > 600) {
+      setTerminalLogs(prev => [...prev, '❌ HALT: Maximum execution step count limit exceeded (600).']);
+      setIsPlaying(false);
+      return;
+    }
 
-    // Setup working runtime variables
-    let currentRobot = { ...activeLevel.start };
-    let currentGrid = gridState.map(row => row.map(c => ({ ...c })));
-    let starsRemaining = currentGrid.flat().filter(c => c.hasStar).length;
-    
-    // Call stack frame: { fn: 'f1' | 'f2', ip: number }
-    let callStack: { fn: 'f1' | 'f2'; ip: number }[] = [{ fn: 'f1', ip: 0 }];
-    let stepCount = 0;
-    
-    setRobot({ ...currentRobot });
-    setGridState(currentGrid);
+    if (runtimeStack.length > 50) {
+      setTerminalLogs(prev => [...prev, '💥 STACK OVERFLOW: Recursion depth exceeded limit (50).']);
+      setIsPlaying(false);
+      return;
+    }
 
-    timerRef.current = setInterval(() => {
-      stepCount++;
-      
-      // Safety Limit to prevent infinite freezes
-      if (stepCount > 300) {
-        clearInterval(timerRef.current!);
+    // Get current instruction pointer frame
+    let updatedStack = [...runtimeStack];
+    let frameIdx = updatedStack.length - 1;
+    let frame = updatedStack[frameIdx];
+
+    const slots = frame.fn === 'f1' ? f1 : f2;
+
+    if (frame.ip >= slots.length) {
+      updatedStack.pop();
+      setRuntimeStack(updatedStack);
+      setStepCount(prev => prev + 1);
+      return; // Handled next call
+    }
+
+    const slot = slots[frame.ip];
+    frame.ip++; // Increment instruction pointer
+    setRuntimeStack(updatedStack);
+
+    // Skip blank slots
+    if (!slot.cmd) {
+      setStepCount(prev => prev + 1);
+      return;
+    }
+
+    // Check color condition
+    const currentCell = runtimeGrid[runtimeRobot.r][runtimeRobot.c];
+    const match = slot.cond === 'none' || slot.cond === null || slot.cond === currentCell.color;
+
+    if (!match) {
+      setStepCount(prev => prev + 1);
+      return;
+    }
+
+    // Update execution history
+    const histId = `${frame.fn}-${frame.ip - 1}-${stepCount}`;
+    const newHist = { cmd: slot.cmd, cond: slot.cond, id: histId };
+    setExecutionHistory(prev => [...prev, newHist]);
+    setActiveHistIdx(executionHistory.length);
+
+    // Run action
+    let nextRobot = { ...runtimeRobot };
+    let nextGrid = runtimeGrid.map(row => row.map(cell => ({ ...cell })));
+    let nextStars = starsLeft;
+
+    if (slot.cmd === 'up') {
+      if (runtimeRobot.dir === 'N') nextRobot.r--;
+      if (runtimeRobot.dir === 'E') nextRobot.c++;
+      if (runtimeRobot.dir === 'S') nextRobot.r++;
+      if (runtimeRobot.dir === 'W') nextRobot.c--;
+
+      // Boundary check
+      if (nextRobot.r < 0 || nextRobot.r >= activeLevel.rows || nextRobot.c < 0 || nextRobot.c >= activeLevel.cols) {
+        setTerminalLogs(prev => [...prev, '💥 CRASH: Robot fell off grid boundaries!']);
         setIsPlaying(false);
-        setTerminalLogs(prev => [...prev, '❌ RUNTIME CRASH: Infinite recursion limit hit (300 steps).']);
         return;
       }
 
-      // If callstack is empty, execution halts
-      if (callStack.length === 0) {
-        clearInterval(timerRef.current!);
+      // Walkable check
+      const nextCell = nextGrid[nextRobot.r][nextRobot.c];
+      if (nextCell.color === 'gray') {
+        setTerminalLogs(prev => [...prev, `💥 CRASH: Stepped onto wall at [${nextRobot.r}, ${nextRobot.c}].`]);
         setIsPlaying(false);
-        if (starsRemaining === 0) {
+        return;
+      }
+
+      setRuntimeRobot(nextRobot);
+
+      // Star collection check
+      if (nextCell.hasStar) {
+        nextCell.hasStar = false;
+        nextStars--;
+        setStarsLeft(nextStars);
+        setRuntimeGrid(nextGrid);
+        setGridState(nextGrid); // update visually
+        setTerminalLogs(prev => [...prev, `✨ Star collected at [${nextRobot.r}, ${nextRobot.c}]! (${nextStars} remaining)`]);
+        
+        if (nextStars === 0) {
           handleWinLevel();
-        } else {
-          setTerminalLogs(prev => [...prev, `❌ HALT: No instructions left. Stars remaining: ${starsRemaining}`]);
-        }
-        return;
-      }
-
-      // Stack Overflow safety check
-      if (callStack.length > 50) {
-        clearInterval(timerRef.current!);
-        setIsPlaying(false);
-        setTerminalLogs(prev => [...prev, '❌ RUNTIME CRASH: Stack overflow! Recursion depth exceeded 50.']);
-        return;
-      }
-
-      // Fetch top frame
-      let frame = callStack[callStack.length - 1];
-      const slots = frame.fn === 'f1' ? f1 : f2;
-
-      // Handle instruction pointer bounds
-      if (frame.ip >= slots.length) {
-        callStack.pop();
-        return; // Next interval loop will handle the parent frame
-      }
-
-      const slot = slots[frame.ip];
-      frame.ip++; // Advance IP
-
-      // Skip blank slot
-      if (!slot.cmd) {
-        return;
-      }
-
-      // Check color condition
-      const currentCell = currentGrid[currentRobot.r][currentRobot.c];
-      const matchCond = slot.cond === 'none' || slot.cond === null || slot.cond === currentCell.color;
-
-      if (!matchCond) {
-        return; // Condition not met, skip execution of this slot
-      }
-
-      // Record visual history
-      setExecutionHistory(prev => [...prev, `${frame.fn.toUpperCase()}[${frame.ip - 1}]`]);
-
-      // Execute Action
-      if (slot.cmd === 'up') {
-        let nextR = currentRobot.r;
-        let nextC = currentRobot.c;
-
-        if (currentRobot.dir === 'N') nextR--;
-        if (currentRobot.dir === 'E') nextC++;
-        if (currentRobot.dir === 'S') nextR++;
-        if (currentRobot.dir === 'W') nextC--;
-
-        // Crash conditions
-        if (nextR < 0 || nextR >= activeLevel.rows || nextC < 0 || nextC >= activeLevel.cols) {
-          clearInterval(timerRef.current!);
-          setIsPlaying(false);
-          setTerminalLogs(prev => [...prev, `💥 CRASH: Robot went off-grid boundary at [${nextR}, ${nextC}]!`]);
           return;
         }
-
-        const nextCell = currentGrid[nextR][nextC];
-        if (nextCell.color === 'gray') {
-          clearInterval(timerRef.current!);
-          setIsPlaying(false);
-          setTerminalLogs(prev => [...prev, `💥 CRASH: Stepped onto a gray cell at [${nextR}, ${nextC}]! Paths must follow colored tiles.`]);
-          return;
-        }
-
-        // Move succeeded
-        currentRobot.r = nextR;
-        currentRobot.c = nextC;
-        setRobot({ ...currentRobot });
-
-        // Collect stars
-        if (nextCell.hasStar) {
-          nextCell.hasStar = false;
-          starsRemaining--;
-          setGridState(currentGrid.map(row => row.map(c => ({ ...c }))));
-          setTerminalLogs(prev => [...prev, `✨ Star collected at [${nextR}, ${nextC}]! (${starsRemaining} left)`]);
-          
-          if (starsRemaining === 0) {
-            clearInterval(timerRef.current!);
-            setIsPlaying(false);
-            handleWinLevel();
-            return;
-          }
-        }
-      } else if (slot.cmd === 'ccw') {
-        const dirs: RobotState['dir'][] = ['N', 'W', 'S', 'E'];
-        const idx = dirs.indexOf(currentRobot.dir);
-        currentRobot.dir = dirs[(idx + 1) % 4];
-        setRobot({ ...currentRobot });
-      } else if (slot.cmd === 'cw') {
-        const dirs: RobotState['dir'][] = ['N', 'E', 'S', 'W'];
-        const idx = dirs.indexOf(currentRobot.dir);
-        currentRobot.dir = dirs[(idx + 1) % 4];
-        setRobot({ ...currentRobot });
-      } else if (slot.cmd === 'f1') {
-        callStack.push({ fn: 'f1', ip: 0 });
-      } else if (slot.cmd === 'f2') {
-        callStack.push({ fn: 'f2', ip: 0 });
       }
+    } else if (slot.cmd === 'ccw') {
+      const dirs: RobotState['dir'][] = ['N', 'W', 'S', 'E'];
+      nextRobot.dir = dirs[(dirs.indexOf(runtimeRobot.dir) + 1) % 4];
+      setRuntimeRobot(nextRobot);
+    } else if (slot.cmd === 'cw') {
+      const dirs: RobotState['dir'][] = ['N', 'E', 'S', 'W'];
+      nextRobot.dir = dirs[(dirs.indexOf(runtimeRobot.dir) + 1) % 4];
+      setRuntimeRobot(nextRobot);
+    } else if (slot.cmd === 'f1') {
+      updatedStack.push({ fn: 'f1', ip: 0 });
+      setRuntimeStack(updatedStack);
+    } else if (slot.cmd === 'f2') {
+      updatedStack.push({ fn: 'f2', ip: 0 });
+      setRuntimeStack(updatedStack);
+    } else if (slot.cmd === 'paint_red') {
+      currentCell.color = 'red';
+      setRuntimeGrid(nextGrid);
+      setGridState(nextGrid);
+      setTerminalLogs(prev => [...prev, `🎨 Cell at [${runtimeRobot.r}, ${runtimeRobot.c}] painted Red.`]);
+    } else if (slot.cmd === 'paint_green') {
+      currentCell.color = 'green';
+      setRuntimeGrid(nextGrid);
+      setGridState(nextGrid);
+      setTerminalLogs(prev => [...prev, `🎨 Cell at [${runtimeRobot.r}, ${runtimeRobot.c}] painted Green.`]);
+    } else if (slot.cmd === 'paint_blue') {
+      currentCell.color = 'blue';
+      setRuntimeGrid(nextGrid);
+      setGridState(nextGrid);
+      setTerminalLogs(prev => [...prev, `🎨 Cell at [${runtimeRobot.r}, ${runtimeRobot.c}] painted Blue.`]);
+    }
 
-    }, 350); // Animated speed
+    setStepCount(prev => prev + 1);
   };
+
+  // Sync state loops for running Play mode
+  useEffect(() => {
+    if (isPlaying && !isPaused && !hasWon) {
+      timerRef.current = setTimeout(() => {
+        executeOneInstruction();
+      }, executionSpeed);
+    }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [isPlaying, isPaused, runtimeStack, runtimeRobot, runtimeGrid, starsLeft, stepCount, executionSpeed]);
 
   const handleWinLevel = () => {
     setHasWon(true);
-    setTerminalLogs(prev => [...prev, `🎉 VICTORY! Collected all stars successfully on ${activeLevel.name}!`]);
+    setIsPlaying(false);
+    setTerminalLogs(prev => [...prev, `🎉 VICTORY! Solved ${activeLevel.name} in ${stepCount} steps.`]);
+
+    // Calculate score stars
+    const totalCmds = [...f1, ...f2].filter(s => s.cmd !== null).length;
+    let starsEarned = 1;
+    if (totalCmds <= activeLevel.minCmdsFor3Stars) {
+      starsEarned = 3;
+    } else if (totalCmds <= activeLevel.minCmdsFor3Stars + 2) {
+      starsEarned = 2;
+    }
+
+    const updatedStars = { ...levelStarsMap, [activeLevel.id]: Math.max(levelStarsMap[activeLevel.id] || 0, starsEarned) };
     
-    // Add rewards once
+    // Add completed levels
     if (!completedLevels.includes(activeLevel.id)) {
       const newCompleted = [...completedLevels, activeLevel.id];
-      saveProgress(newCompleted, unlockedPhases);
+      saveProgress(newCompleted, unlockedPhases, updatedStars);
       addXpAndCoins(80, 20, `Completed Logic Level ${activeLevel.id}`);
-      triggerAlert(`🎮 Level ${activeLevel.id} Cleared! Gained +80 XP & +20 CIST Coins!`);
+      triggerAlert(`🎮 Level ${activeLevel.id} Cleared! Gained +80 XP & +20 CIST Coins! (${starsEarned} Star Score)`);
+    } else {
+      saveProgress(completedLevels, unlockedPhases, updatedStars);
+      triggerAlert(`🎮 Level ${activeLevel.id} Re-solved! Score: ${starsEarned} Star(s)`);
     }
   };
 
   const handleReset = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
     resetLevelState(activeLevel);
   };
 
-  // Click slot to set edit mode
-  const handleSlotClick = (fn: 'f1' | 'f2', index: number) => {
-    if (isPlaying) return;
-    setActiveSlot({ fn, index });
-  };
-
-  const updateActiveSlotCmd = (cmd: CommandSlot['cmd']) => {
-    if (!activeSlot) return;
-    const { fn, index } = activeSlot;
-    if (fn === 'f1') {
-      const copy = [...f1];
-      copy[index] = { ...copy[index], cmd };
-      setF1(copy);
-    } else {
-      const copy = [...f2];
-      copy[index] = { ...copy[index], cmd };
-      setF2(copy);
-    }
-  };
-
-  const updateActiveSlotCond = (cond: CommandSlot['cond']) => {
-    if (!activeSlot) return;
-    const { fn, index } = activeSlot;
-    if (fn === 'f1') {
-      const copy = [...f1];
-      copy[index] = { ...copy[index], cond };
-      setF1(copy);
-    } else {
-      const copy = [...f2];
-      copy[index] = { ...copy[index], cond };
-      setF2(copy);
-    }
-  };
-
-  // Helper values
-  const getDirSymbol = (dir: RobotState['dir']) => {
+  const getDirArrowSymbol = (dir: RobotState['dir']) => {
     if (dir === 'N') return '▲';
     if (dir === 'E') return '►';
     if (dir === 'S') return '▼';
     return '◄';
   };
 
-  const getCmdSymbol = (cmd: CommandSlot['cmd']) => {
-    if (cmd === 'up') return '↑';
-    if (cmd === 'ccw') return '↺';
-    if (cmd === 'cw') return '↻';
-    if (cmd === 'f1') return 'F1';
-    if (cmd === 'f2') return 'F2';
-    return '';
+  // =========================================================================
+  // LEVEL EDITOR ARCHITECTURE IMPLEMENTATION
+  // =========================================================================
+  const handleEditorCellClick = (rIdx: number, cIdx: number) => {
+    if (!isEditorMode) return;
+    const copy = gridState.map(row => row.map(cell => ({ ...cell })));
+
+    if (editorRobotPlacement) {
+      // Place robot start position
+      setRobot({ r: rIdx, c: cIdx, dir: 'N' });
+      setEditorRobotPlacement(false);
+      setTerminalLogs(prev => [...prev, `[EDITOR] Robot starting position placed at [${rIdx}, ${cIdx}]`]);
+    } else if (editorStarToggle) {
+      // Toggle star placement
+      copy[rIdx][cIdx].hasStar = !copy[rIdx][cIdx].hasStar;
+      // Walkable must be true/white if star is placed
+      if (copy[rIdx][cIdx].hasStar && copy[rIdx][cIdx].color === 'gray') {
+        copy[rIdx][cIdx].color = 'white';
+      }
+      setGridState(copy);
+    } else {
+      // Paint tile color
+      copy[rIdx][cIdx].color = copy[rIdx][cIdx].color === editorPaintColor ? 'gray' : editorPaintColor;
+      // If turned to wall, remove star
+      if (copy[rIdx][cIdx].color === 'gray') {
+        copy[rIdx][cIdx].hasStar = false;
+      }
+      setGridState(copy);
+    }
   };
 
   // =========================================================================
-  // QUIZ HANDLERS
+  // QUIZ ASSESSMENTS
   // =========================================================================
-  const startQuiz = () => {
-    setQuizIdx(0);
-    setQuizAnswers({});
-    setQuizScore(0);
-    setQuizCompleted(false);
-    setQuizError(false);
-    setActiveTab('test');
-  };
-
   const handleSelectQuizOption = (optIdx: number) => {
     setQuizAnswers(prev => ({ ...prev, [quizIdx]: optIdx }));
   };
@@ -736,472 +1005,609 @@ export default function LogicArena() {
     if (quizIdx + 1 < questions.length) {
       setQuizIdx(prev => prev + 1);
     } else {
-      // Quiz finished
       setQuizCompleted(true);
       const passed = nextScore === questions.length;
       if (passed) {
-        // Unlock next phase
         const nextPhase = activePhase + 1;
         const newPhases = [...unlockedPhases];
-        if (!newPhases.includes(nextPhase) && nextPhase <= 3) {
+        if (!newPhases.includes(nextPhase) && nextPhase <= 5) {
           newPhases.push(nextPhase);
         }
-        saveProgress(completedLevels, newPhases);
+        saveProgress(completedLevels, newPhases, levelStarsMap);
         addXpAndCoins(100, 25, `Passed Logic Phase ${activePhase} Test`);
-        triggerAlert(`🏆 Passed Phase ${activePhase} Test! +100 XP rewarded!`);
+        triggerAlert(`🏆 Passed Phase ${activePhase} Assessment! +100 XP rewarded!`);
       } else {
         setQuizError(true);
       }
     }
   };
 
+  const startQuiz = () => {
+    setQuizIdx(0);
+    setQuizAnswers({});
+    setQuizScore(0);
+    setQuizCompleted(false);
+    setQuizError(false);
+    setActiveTab('test');
+  };
+
   const handlePhaseChange = (phaseNum: number) => {
     if (!unlockedPhases.includes(phaseNum)) return;
     setActivePhase(phaseNum);
     setActiveTab('games');
-    // Load first level of the phase
-    const idx = allLevels.findIndex(lvl => lvl.phase === phaseNum);
+    const idx = LEVEL_DEFS.findIndex(lvl => lvl.phase === phaseNum);
     if (idx !== -1) setSelectedLevelIdx(idx);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-5">
-        <div>
-          <h2 className="text-2xl font-black uppercase text-slate-800 tracking-tight flex items-center space-x-2">
-            <Cpu className="h-6 w-6 text-navy-deep animate-pulse" />
-            <span>Logic Programming Arena</span>
-          </h2>
-          <p className="text-xs text-slate-500 uppercase font-semibold mt-1 tracking-wider">
-            Solve progressive grid puzzles, declare functional sub-routines, and complete tests
-          </p>
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans p-4 space-y-4">
+      {/* Top Bar Banner Header */}
+      <div className="bg-white border border-slate-300 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex items-center space-x-3.5">
+          <BookOpen className="h-6 w-6 text-[#0B2545]" />
+          <div>
+            <h1 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+              <span>Game #{activeLevel.id}</span>
+              <span className="text-xs text-slate-400 font-semibold lowercase">({activeLevel.name})</span>
+            </h1>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
+              CIST CodeQuest Logic Pathway
+            </p>
+          </div>
         </div>
 
-        {/* Phase Badges */}
-        <div className="flex gap-2">
-          {[1, 2, 3].map(num => {
-            const unlocked = unlockedPhases.includes(num);
-            const active = activePhase === num && activeTab === 'games';
-            return (
-              <button
-                key={num}
-                onClick={() => handlePhaseChange(num)}
-                disabled={!unlocked}
-                className={`relative px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center space-x-1.5 ${
-                  active ? 'bg-navy-deep text-white shadow-md' :
-                  unlocked ? 'bg-white border border-slate-200 text-slate-650 hover:bg-slate-50' :
-                  'bg-slate-100 text-slate-400 border border-slate-150 cursor-not-allowed'
-                }`}
-              >
-                {!unlocked && <Lock className="h-3 w-3" />}
-                <span>Phase {num}</span>
-              </button>
-            );
-          })}
+        {/* Level Progression Progress Bar */}
+        <div className="flex-1 max-w-md mx-6 hidden md:block">
+          <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+            <span>Overall Progress</span>
+            <span>{completedLevels.length} / 21 Levels Cleared</span>
+          </div>
+          <div className="h-2.5 w-full bg-slate-100 border border-slate-300">
+            <div
+              className="h-full bg-[#22c55e] transition-all duration-300"
+              style={{ width: `${(completedLevels.length / 21) * 100}%` }}
+            ></div>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <span className="text-sm font-black text-[#0B2545] uppercase tracking-wider">
+            Level {activeLevel.id}
+          </span>
+          <div className="flex space-x-1">
+            {[1, 2, 3, 4, 5].map(num => {
+              const unlocked = unlockedPhases.includes(num);
+              const active = activePhase === num && activeTab === 'games';
+              return (
+                <button
+                  key={num}
+                  onClick={() => handlePhaseChange(num)}
+                  disabled={!unlocked}
+                  className={`px-3 py-1 border text-[10px] font-bold tracking-wider uppercase transition ${
+                    active ? 'bg-[#0B2545] text-white border-[#0B2545]' :
+                    unlocked ? 'bg-white border-slate-350 text-slate-700 hover:bg-slate-50' :
+                    'bg-slate-100 border-slate-200 text-slate-450 cursor-not-allowed'
+                  }`}
+                >
+                  P{num}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {alertMsg && (
-        <div className="rounded-xl border border-emerald-250 bg-emerald-50 p-4 font-bold text-xs text-emerald-850 flex items-center space-x-2.5 shadow-sm animate-bounce">
-          <Award className="h-5 w-5 text-emerald-600 animate-spin" />
+        <div className="bg-emerald-500 text-white font-bold text-xs p-4 flex items-center space-x-3 shadow-md animate-bounce">
+          <Award className="h-5 w-5 text-white" />
           <span>{alertMsg}</span>
         </div>
       )}
 
-      {/* Main Container */}
-      <div className="grid gap-6 lg:grid-cols-12 items-stretch">
+      {/* Main Grid & Editor Splitter */}
+      <div className="grid gap-4 lg:grid-cols-12 items-stretch">
         
-        {/* LEFT COLUMN: Map List & Status */}
-        <div className="lg:col-span-3 flex flex-col gap-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block border-b pb-2">
-              Phase {activePhase} Challenge List
+        {/* LEFT COLUMN: Map Selection Drawer (3 Cols) */}
+        <div className="lg:col-span-3 bg-white border border-slate-300 p-4 space-y-4">
+          <div className="border-b pb-2 flex justify-between items-center">
+            <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest">
+              Phase {activePhase} Levels
             </span>
-            <div className="space-y-2">
-              {allLevels
-                .filter(lvl => lvl.phase === activePhase)
-                .map((lvl) => {
-                  const isActive = activeLevel.id === lvl.id;
-                  const isDone = completedLevels.includes(lvl.id);
-                  return (
-                    <button
-                      key={lvl.id}
-                      onClick={() => {
-                        setActiveTab('games');
-                        setSelectedLevelIdx(allLevels.findIndex(x => x.id === lvl.id));
-                      }}
-                      className={`w-full text-left p-3 rounded-lg text-xs font-semibold border flex items-center justify-between transition-all ${
-                        isActive
-                          ? 'bg-navy-deep border-navy-deep text-white shadow-md translate-x-1'
-                          : 'bg-white border-slate-150 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div>
-                        <span className="block font-black uppercase text-[9px] tracking-wider opacity-60">Level {lvl.id}</span>
-                        <span className="block mt-0.5 truncate">{lvl.name.split(': ')[1]}</span>
-                      </div>
-                      {isDone && (
-                        <CheckCircle2 className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-emerald-500'}`} />
+            <button
+              onClick={() => setIsEditorMode(prev => !prev)}
+              className={`px-2 py-0.5 border text-[9px] uppercase font-black tracking-wide ${
+                isEditorMode ? 'bg-[#ef4444] text-white' : 'bg-slate-100 text-slate-750'
+              }`}
+            >
+              Editor {isEditorMode ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 max-h-[290px] overflow-y-auto">
+            {LEVEL_DEFS
+              .filter(lvl => lvl.phase === activePhase)
+              .map(lvl => {
+                const isActive = activeLevel.id === lvl.id;
+                const isCleared = completedLevels.includes(lvl.id);
+                const starsCount = levelStarsMap[lvl.id] || 0;
+
+                return (
+                  <button
+                    key={lvl.id}
+                    onClick={() => {
+                      setActiveTab('games');
+                      setSelectedLevelIdx(LEVEL_DEFS.findIndex(x => x.id === lvl.id));
+                    }}
+                    className={`w-full text-left p-3.5 border flex items-center justify-between transition-all ${
+                      isActive ? 'bg-[#0B2545] text-white border-[#0B2545]' : 'bg-[#f8fafc] border-slate-300 hover:bg-slate-50 text-slate-750'
+                    }`}
+                  >
+                    <div>
+                      <span className="block text-[8px] font-black uppercase tracking-wider opacity-60">Level {lvl.id}</span>
+                      <span className="block text-xs font-bold truncate">{lvl.name}</span>
+                    </div>
+                    <div className="flex items-center space-x-1 shrink-0">
+                      {isCleared && (
+                        <div className="flex space-x-0.5">
+                          {Array.from({ length: starsCount }).map((_, i) => (
+                            <StarIcon key={i} className="h-3 w-3 text-yellow-400 fill-current" />
+                          ))}
+                        </div>
                       )}
-                    </button>
-                  );
-                })}
-            </div>
-
-            {/* Test at the end of phase */}
-            <div className="pt-2">
-              <button
-                onClick={startQuiz}
-                className={`w-full py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider border text-center transition flex items-center justify-center space-x-1.5 ${
-                  activeTab === 'test'
-                    ? 'bg-maple-red border-maple-red text-white shadow-lg'
-                    : 'bg-white border-dashed border-slate-350 text-slate-750 hover:bg-slate-50'
-                }`}
-              >
-                <span>Phase {activePhase} Assessment</span>
-              </button>
-            </div>
+                    </div>
+                  </button>
+                );
+              })}
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm text-xs space-y-3 leading-relaxed">
-            <h5 className="font-black text-slate-700 uppercase tracking-wide flex items-center space-x-1">
-              <HelpCircle className="h-4 w-4 text-navy-deep" />
-              <span>Logic Guidelines</span>
-            </h5>
-            <p className="text-slate-550 font-medium">
-              The goal of the robot is to traverse the colored paths and gather all target star nodes.
-            </p>
-            <p className="text-slate-550 font-medium">
-              Click on function cells inside <strong>F1</strong> and <strong>F2</strong> to select them, then assign commands and optional color conditions.
-            </p>
+          {/* Phase Quiz Test Button */}
+          <div className="pt-2 border-t border-slate-200">
+            <button
+              onClick={startQuiz}
+              className={`w-full py-3.5 border border-dashed text-center font-black uppercase text-xs tracking-wider transition ${
+                activeTab === 'test' ? 'bg-[#ef4444] text-white border-[#ef4444]' : 'bg-[#f8fafc] border-slate-350 text-slate-750 hover:bg-slate-50'
+              }`}
+            >
+              Take Phase {activePhase} Test
+            </button>
           </div>
+
+          {/* Level Editor Tools Panel */}
+          {isEditorMode && (
+            <div className="border-t pt-4 space-y-3">
+              <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest block">Editor Palette</span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    setEditorStarToggle(false);
+                    setEditorRobotPlacement(false);
+                    setEditorPaintColor('white');
+                  }}
+                  className={`p-2 border text-[10px] font-bold uppercase ${editorPaintColor === 'white' && !editorStarToggle && !editorRobotPlacement ? 'bg-[#0B2545] text-white' : 'bg-slate-50'}`}
+                >
+                  White path
+                </button>
+                <button
+                  onClick={() => {
+                    setEditorStarToggle(false);
+                    setEditorRobotPlacement(false);
+                    setEditorPaintColor('red');
+                  }}
+                  className={`p-2 border text-[10px] font-bold uppercase ${editorPaintColor === 'red' && !editorStarToggle && !editorRobotPlacement ? 'bg-[#0B2545] text-white' : 'bg-slate-50'}`}
+                >
+                  Red path
+                </button>
+                <button
+                  onClick={() => {
+                    setEditorStarToggle(false);
+                    setEditorRobotPlacement(false);
+                    setEditorPaintColor('green');
+                  }}
+                  className={`p-2 border text-[10px] font-bold uppercase ${editorPaintColor === 'green' && !editorStarToggle && !editorRobotPlacement ? 'bg-[#0B2545] text-white' : 'bg-slate-50'}`}
+                >
+                  Green path
+                </button>
+                <button
+                  onClick={() => {
+                    setEditorStarToggle(false);
+                    setEditorRobotPlacement(false);
+                    setEditorPaintColor('blue');
+                  }}
+                  className={`p-2 border text-[10px] font-bold uppercase ${editorPaintColor === 'blue' && !editorStarToggle && !editorRobotPlacement ? 'bg-[#0B2545] text-white' : 'bg-slate-50'}`}
+                >
+                  Blue path
+                </button>
+                <button
+                  onClick={() => {
+                    setEditorStarToggle(true);
+                    setEditorRobotPlacement(false);
+                  }}
+                  className={`p-2 border text-[10px] font-bold uppercase ${editorStarToggle ? 'bg-[#0B2545] text-white' : 'bg-slate-50'}`}
+                >
+                  Star tool
+                </button>
+                <button
+                  onClick={() => {
+                    setEditorRobotPlacement(true);
+                    setEditorStarToggle(false);
+                  }}
+                  className={`p-2 border text-[10px] font-bold uppercase ${editorRobotPlacement ? 'bg-[#0B2545] text-white' : 'bg-slate-50'}`}
+                >
+                  Robot place
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* RIGHT COLUMN: Play Area / Quiz Quiz */}
-        <div className="lg:col-span-9">
+        {/* RIGHT COLUMN: RoboZZle Interactive Board (9 Cols) */}
+        <div className="lg:col-span-9 flex flex-col gap-4">
           
-          {/* TAB 1: GAMEPLAY WORKSPACE */}
           {activeTab === 'games' && (
-            <div className="grid gap-6 md:grid-cols-12 items-stretch">
+            <div className="bg-white border border-slate-300 p-6 flex flex-col gap-6">
               
-              {/* Visual Canvas Block (7 Columns) */}
-              <div className="md:col-span-7 bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col justify-between items-center">
-                <div className="w-full flex justify-between items-center border-b pb-3.5 mb-5">
-                  <div>
-                    <h3 className="font-black text-slate-800 text-sm uppercase leading-none">
-                      {activeLevel.name}
-                    </h3>
-                    <p className="text-[10px] text-slate-500 font-semibold mt-1.5 leading-snug">
-                      {activeLevel.desc}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Grid Wrapper */}
+              {/* PLAY GRID VIEWPORT */}
+              <div className="flex flex-col items-center justify-center p-4 bg-[#f1f5f9] border border-slate-300">
                 <div
-                  className="grid bg-slate-100 p-3.5 rounded-2xl border border-slate-300 shadow-inner"
+                  className="grid bg-white p-2 border border-slate-450"
                   style={{
                     gridTemplateColumns: `repeat(${activeLevel.cols}, minmax(0, 1fr))`,
-                    gap: activeLevel.id === 7 ? '2px' : '4px',
-                    width: activeLevel.id === 7 ? '380px' : '280px',
-                    height: activeLevel.id === 7 ? '380px' : '280px'
+                    gap: '1px',
+                    width: activeLevel.id === 19 ? '380px' : '330px',
+                    height: activeLevel.id === 19 ? '380px' : '330px'
                   }}
                 >
                   {gridState.map((row, r) =>
                     row.map((cell, c) => {
-                      const isRobot = robot.r === r && robot.c === c;
+                      const isRobot = isPlaying ? (runtimeRobot.r === r && runtimeRobot.c === c) : (robot.r === r && robot.c === c);
+                      const currentRobot = isPlaying ? runtimeRobot : robot;
                       const hasStar = cell.hasStar;
-                      const isGray = cell.color === 'gray';
 
                       return (
                         <div
                           key={`${r}-${c}`}
-                          className={`relative rounded border aspect-square flex items-center justify-center transition-all ${
-                            isGray ? 'bg-slate-250 border-slate-300' :
-                            cell.color === 'red' ? 'bg-rose-500 border-rose-600' :
-                            cell.color === 'blue' ? 'bg-sky-500 border-sky-600' :
-                            cell.color === 'green' ? 'bg-emerald-500 border-emerald-600 animate-pulse' :
-                            'bg-white border-slate-200'
+                          onClick={() => handleEditorCellClick(r, c)}
+                          className={`relative aspect-square border-[0.5px] border-slate-200 flex items-center justify-center transition-all ${isEditorMode ? 'cursor-crosshair hover:opacity-85' : ''} ${
+                            cell.color === 'gray' ? 'bg-[#e2e8f0]' :
+                            cell.color === 'red' ? 'bg-[#ef4444]' :
+                            cell.color === 'blue' ? 'bg-[#3b82f6]' :
+                            cell.color === 'green' ? 'bg-[#22c55e]' :
+                            'bg-white'
                           }`}
                         >
                           {isRobot && (
-                            <span className="font-extrabold text-white text-base drop-shadow-md select-none transform transition-transform">
-                              {getDirSymbol(robot.dir)}
+                            <span className="font-extrabold text-black text-sm select-none transform transition-transform">
+                              {getDirArrowSymbol(currentRobot.dir)}
                             </span>
                           )}
                           {!isRobot && hasStar && (
-                            <Star className="h-5 w-5 text-amber-300 fill-current drop-shadow animate-bounce" />
+                            <StarIcon className="h-4.5 w-4.5 text-yellow-400 fill-current drop-shadow animate-pulse" />
                           )}
                         </div>
                       );
                     })
                   )}
                 </div>
+              </div>
 
-                {/* Colors Legend */}
-                {activeLevel.phase === 3 && (
-                  <div className="mt-5 flex gap-4 text-[9px] uppercase font-black text-slate-450 tracking-wider">
-                    <span className="flex items-center"><span className="h-3 w-3 rounded bg-rose-500 mr-1.5 block"></span> Red Path</span>
-                    <span className="flex items-center"><span className="h-3 w-3 rounded bg-sky-500 mr-1.5 block"></span> Blue Path</span>
-                    <span className="flex items-center"><span className="h-3 w-3 rounded bg-emerald-500 mr-1.5 block"></span> Green Corner</span>
+              {/* EXECUTION HISTORY (Bottom Left) */}
+              <div className="border border-slate-300 bg-white p-3 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="flex-1 w-full overflow-hidden">
+                  <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                    Execution History
+                  </span>
+                  
+                  <div className="flex gap-1 overflow-x-auto whitespace-nowrap py-1">
+                    {executionHistory.length === 0 ? (
+                      <span className="text-slate-450 italic text-[10px] p-1">No instructions executed yet.</span>
+                    ) : (
+                      executionHistory.map((hist, idx) => {
+                        const isActive = idx === activeHistIdx;
+                        return (
+                          <div
+                            key={hist.id}
+                            className={`px-2.5 py-1 text-[10.5px] font-bold border transition ${
+                              isActive ? 'bg-[#ef4444] text-white border-[#ef4444]' : 'bg-slate-50 border-slate-250 text-slate-700'
+                            }`}
+                          >
+                            <span>{getCmdSymbol(hist.cmd)}</span>
+                            {hist.cond && hist.cond !== 'none' && (
+                              <span className={`inline-block ml-1 h-2 w-2 rounded-full ${
+                                hist.cond === 'red' ? 'bg-[#ef4444]' :
+                                hist.cond === 'blue' ? 'bg-[#3b82f6]' :
+                                'bg-[#22c55e]'
+                              }`} />
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
-                )}
+                </div>
 
-                {/* Control Action Buttons */}
-                <div className="w-full flex gap-3 mt-6 border-t pt-4">
+                {/* BOTTOM RIGHT CONTROLS */}
+                <div className="flex gap-1.5 shrink-0 bg-slate-550/15 p-1 border">
+                  <button
+                    onClick={handlePlay}
+                    disabled={isPlaying && !isPaused}
+                    className="p-3 bg-[#3b82f6] hover:bg-blue-600 text-white font-extrabold text-xs shadow transition active:scale-95 disabled:opacity-50"
+                    title="Play"
+                  >
+                    <Play className="h-4 w-4 fill-current" />
+                  </button>
+                  <button
+                    onClick={() => setIsPaused(prev => !prev)}
+                    disabled={!isPlaying}
+                    className="p-3 bg-[#3b82f6] hover:bg-blue-600 text-white font-extrabold text-xs shadow transition active:scale-95 disabled:opacity-50"
+                    title="Pause"
+                  >
+                    <Pause className="h-4 w-4 fill-current" />
+                  </button>
+                  <button
+                    onClick={handleStep}
+                    className="p-3 bg-[#3b82f6] hover:bg-blue-600 text-white font-extrabold text-xs shadow transition active:scale-95"
+                    title="Step Forward"
+                  >
+                    <StepIcon className="h-4 w-4 fill-current" />
+                  </button>
                   <button
                     onClick={handleReset}
-                    className="flex items-center space-x-1 border border-slate-350 hover:bg-slate-50 px-4 py-3 text-xs font-black uppercase text-slate-700 rounded-xl transition shadow-sm"
+                    className="p-3 bg-[#3b82f6] hover:bg-blue-600 text-white font-extrabold text-xs shadow transition active:scale-95"
+                    title="Restart"
                   >
-                    <RotateCcw className="h-4 w-4" />
-                    <span>Reset</span>
+                    <ResetIcon className="h-4 w-4 fill-current" />
                   </button>
-                  
                   <button
-                    onClick={handleRunExecution}
-                    disabled={isPlaying || hasWon}
-                    className="flex-1 flex items-center justify-center space-x-2 bg-navy-deep hover:bg-maple-red px-4 py-3 text-xs font-black uppercase text-white rounded-xl shadow-md transition disabled:opacity-50"
+                    onClick={() => {
+                      const next = executionSpeed === 350 ? 120 : executionSpeed === 120 ? 600 : 350;
+                      setExecutionSpeed(next);
+                    }}
+                    className="p-3 bg-[#3b82f6] hover:bg-blue-600 text-white font-extrabold text-xs shadow transition active:scale-95"
+                    title={`Speed: ${executionSpeed === 600 ? 'Slow' : executionSpeed === 120 ? 'Fast' : 'Normal'}`}
                   >
-                    <Play className="h-4 w-4 text-gold-accent fill-current" />
-                    <span>Execute Program</span>
+                    <SpeedIcon className="h-4 w-4 fill-current" />
                   </button>
                 </div>
               </div>
 
-              {/* Function Editor Panel (5 Columns) */}
-              <div className="md:col-span-5 flex flex-col justify-between gap-5">
+              {/* EDITOR GRID & FUNCTION SLOTS */}
+              <div className="grid gap-6 md:grid-cols-12 items-start">
                 
-                {/* Visual Function Editors */}
-                <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-5">
-                  <div className="border-b pb-2 flex justify-between items-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Program Slots</span>
-                    {activeSlot && (
-                      <span className="text-[9px] bg-navy-deep/10 text-navy-deep px-2 py-0.5 rounded font-black uppercase">
-                        Editing: {activeSlot.fn.toUpperCase()}[{activeSlot.index}]
-                      </span>
-                    )}
-                  </div>
-
-                  {/* F1 Grid Block */}
-                  <div className="space-y-2">
-                    <span className="text-xs font-extrabold text-slate-800 flex items-center space-x-1">
-                      <span className="bg-navy-deep text-white px-2 py-0.5 rounded text-[10px]">F1</span>
-                      <span className="text-[10px] uppercase font-bold text-slate-400">Primary Execution Thread</span>
-                    </span>
-                    <div className="grid grid-cols-4 gap-2">
-                      {f1.map((slot, index) => {
-                        const isActive = activeSlot?.fn === 'f1' && activeSlot.index === index;
+                {/* BOTTOM CENTER: Commands, Conditions, Brushes (5 Cols) */}
+                <div className="md:col-span-5 bg-[#f8fafc] border border-slate-350 p-4 space-y-4">
+                  
+                  {/* Commands */}
+                  <div>
+                    <span className="block text-[9.5px] uppercase font-black tracking-wider text-slate-450 mb-1.5">Commands</span>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { name: 'up', symbol: '↑' },
+                        { name: 'ccw', symbol: '↺' },
+                        { name: 'cw', symbol: '↻' },
+                        { name: 'f1', symbol: 'F1' },
+                        { name: 'f2', symbol: 'F2' }
+                      ].map(cmd => {
+                        const isSelected = selectedPaletteItem?.type === 'cmd' && selectedPaletteItem?.name === cmd.name;
                         return (
                           <button
-                            key={index}
-                            onClick={() => handleSlotClick('f1', index)}
-                            className={`relative h-11 border rounded-lg flex items-center justify-center font-black text-sm transition-all ${
-                              isActive
-                                ? 'border-navy-deep ring-2 ring-navy-deep/20 bg-slate-50'
-                                : 'border-slate-200 bg-white hover:border-slate-400'
+                            key={cmd.name}
+                            draggable="true"
+                            onDragStart={(e) => handleDragStart(e, 'cmd', cmd.name)}
+                            onClick={() => setSelectedPaletteItem({ type: 'cmd', name: cmd.name })}
+                            className={`h-9 w-9 border text-xs font-black uppercase flex items-center justify-center transition ${
+                              isSelected ? 'bg-[#0B2545] text-white border-[#0B2545]' : 'bg-white border-slate-350 hover:bg-slate-50 text-slate-700 shadow-sm'
                             }`}
                           >
-                            {/* Color Condition Badge */}
-                            {slot.cond && slot.cond !== 'none' && (
-                              <span className={`absolute top-0.5 left-0.5 h-2 w-2 rounded-full ${
-                                slot.cond === 'red' ? 'bg-rose-500' :
-                                slot.cond === 'blue' ? 'bg-sky-500' :
-                                'bg-emerald-500'
-                              }`} />
-                            )}
-                            <span className="text-slate-800">{getCmdSymbol(slot.cmd)}</span>
+                            {cmd.symbol}
                           </button>
                         );
                       })}
                     </div>
                   </div>
 
-                  {/* F2 Grid Block */}
-                  {activeLevel.maxF2Slots > 0 && (
-                    <div className="space-y-2 pt-2 border-t border-slate-100">
-                      <span className="text-xs font-extrabold text-slate-800 flex items-center space-x-1">
-                        <span className="bg-navy-deep text-white px-2 py-0.5 rounded text-[10px]">F2</span>
-                        <span className="text-[10px] uppercase font-bold text-slate-400">Sub-Routine Helper</span>
-                      </span>
-                      <div className="grid grid-cols-4 gap-2">
-                        {f2.map((slot, index) => {
-                          const isActive = activeSlot?.fn === 'f2' && activeSlot.index === index;
-                          return (
-                            <button
-                              key={index}
-                              onClick={() => handleSlotClick('f2', index)}
-                              className={`relative h-11 border rounded-lg flex items-center justify-center font-black text-sm transition-all ${
-                                isActive
-                                  ? 'border-navy-deep ring-2 ring-navy-deep/20 bg-slate-50'
-                                  : 'border-slate-200 bg-white hover:border-slate-400'
-                              }`}
-                            >
-                              {/* Color Condition Badge */}
-                              {slot.cond && slot.cond !== 'none' && (
-                                <span className={`absolute top-0.5 left-0.5 h-2 w-2 rounded-full ${
-                                  slot.cond === 'red' ? 'bg-rose-500' :
-                                  slot.cond === 'blue' ? 'bg-sky-500' :
-                                  'bg-emerald-500'
-                                }`} />
-                              )}
-                              <span className="text-slate-800">{getCmdSymbol(slot.cmd)}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                  {/* Conditions */}
+                  <div>
+                    <span className="block text-[9.5px] uppercase font-black tracking-wider text-slate-450 mb-1.5">Conditions</span>
+                    <div className="flex gap-1.5">
+                      <button
+                        draggable="true"
+                        onDragStart={(e) => handleDragStart(e, 'cond', 'none')}
+                        onClick={() => setSelectedPaletteItem({ type: 'cond', name: 'none' })}
+                        className={`px-2.5 py-1.5 border text-[10px] font-bold uppercase transition ${
+                          selectedPaletteItem?.type === 'cond' && selectedPaletteItem?.name === 'none'
+                            ? 'bg-[#0B2545] text-white border-[#0B2545]'
+                            : 'bg-white border-slate-350 text-slate-700'
+                        }`}
+                      >
+                        Always
+                      </button>
+                      {[
+                        { name: 'red', color: 'bg-[#ef4444]' },
+                        { name: 'blue', color: 'bg-[#3b82f6]' },
+                        { name: 'green', color: 'bg-[#22c55e]' }
+                      ].map(cond => {
+                        const isSelected = selectedPaletteItem?.type === 'cond' && selectedPaletteItem?.name === cond.name;
+                        return (
+                          <button
+                            key={cond.name}
+                            draggable="true"
+                            onDragStart={(e) => handleDragStart(e, 'cond', cond.name)}
+                            onClick={() => setSelectedPaletteItem({ type: 'cond', name: cond.name })}
+                            className={`h-8 w-8 border flex items-center justify-center transition ${cond.color} ${
+                              isSelected ? 'ring-2 ring-[#0B2545] border-white' : 'border-slate-350'
+                            }`}
+                          />
+                        );
+                      })}
                     </div>
-                  )}
-
-                  {/* Program Command Selector Palette */}
-                  {activeSlot && (
-                    <div className="pt-4 border-t border-slate-150 space-y-4 animate-fade-in">
-                      {/* Commands Row */}
-                      <div className="space-y-2">
-                        <span className="text-[9.5px] uppercase font-black tracking-wider text-slate-450 block">Select Command Action</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          <button
-                            onClick={() => updateActiveSlotCmd('up')}
-                            className="p-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg font-black text-xs inline-flex items-center space-x-1 text-slate-700"
-                            title="Move Forward"
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                            <span>Forward</span>
-                          </button>
-                          <button
-                            onClick={() => updateActiveSlotCmd('ccw')}
-                            className="p-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg font-black text-xs inline-flex items-center space-x-1 text-slate-700"
-                            title="Turn Left"
-                          >
-                            <RotateLeft className="h-4 w-4" />
-                            <span>Left</span>
-                          </button>
-                          <button
-                            onClick={() => updateActiveSlotCmd('cw')}
-                            className="p-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg font-black text-xs inline-flex items-center space-x-1 text-slate-700"
-                            title="Turn Right"
-                          >
-                            <RotateRight className="h-4 w-4" />
-                            <span>Right</span>
-                          </button>
-                          
-                          {activeLevel.allowedCmds.includes('f1') && (
-                            <button
-                              onClick={() => updateActiveSlotCmd('f1')}
-                              className="p-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg font-black text-xs text-slate-700"
-                            >
-                              Call F1
-                            </button>
-                          )}
-                          {activeLevel.allowedCmds.includes('f2') && (
-                            <button
-                              onClick={() => updateActiveSlotCmd('f2')}
-                              className="p-2 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg font-black text-xs text-slate-700"
-                            >
-                              Call F2
-                            </button>
-                          )}
-                          
-                          <button
-                            onClick={() => {
-                              updateActiveSlotCmd(null);
-                              updateActiveSlotCond('none');
-                            }}
-                            className="p-2 border border-rose-150 bg-rose-50 hover:bg-rose-100 rounded-lg font-black text-xs inline-flex items-center space-x-1 text-maple-red"
-                          >
-                            <Eraser className="h-3.5 w-3.5" />
-                            <span>Clear</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Color Conditions Row (Only if Level allows) */}
-                      {activeLevel.allowedConds.length > 1 && (
-                        <div className="space-y-2">
-                          <span className="text-[9.5px] uppercase font-black tracking-wider text-slate-450 block">Select Color Condition</span>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => updateActiveSlotCond('none')}
-                              className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-100 text-slate-750 font-bold text-xs rounded-lg"
-                            >
-                              Always
-                            </button>
-                            {activeLevel.allowedConds.includes('red') && (
-                              <button
-                                onClick={() => updateActiveSlotCond('red')}
-                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 font-bold text-xs rounded-lg flex items-center space-x-1"
-                              >
-                                <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
-                                <span>Red</span>
-                              </button>
-                            )}
-                            {activeLevel.allowedConds.includes('blue') && (
-                              <button
-                                onClick={() => updateActiveSlotCond('blue')}
-                                className="px-2.5 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 font-bold text-xs rounded-lg flex items-center space-x-1"
-                              >
-                                <span className="h-2.5 w-2.5 rounded-full bg-sky-500" />
-                                <span>Blue</span>
-                              </button>
-                            )}
-                            {activeLevel.allowedConds.includes('green') && (
-                              <button
-                                onClick={() => updateActiveSlotCond('green')}
-                                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-lg flex items-center space-x-1"
-                              >
-                                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                                <span>Green</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Console Output logs & Stack */}
-                <div className="bg-black p-4 rounded-xl border border-navy-light/20 font-mono text-[10.5px] text-slate-350 flex flex-col justify-between h-40">
-                  <div className="flex-1 overflow-y-auto space-y-1.5">
-                    <span className="block text-gray-500 font-bold uppercase text-[9px] border-b border-navy-light/10 pb-1 mb-1.5">
-                      Execution Output Terminal
-                    </span>
-                    {terminalLogs.map((log, index) => {
-                      const isSuccess = log.startsWith('🎉') || log.startsWith('✨');
-                      const isCrash = log.startsWith('❌') || log.startsWith('💥');
-                      return (
-                        <div key={index} className={isSuccess ? 'text-emerald-400 font-bold' : isCrash ? 'text-rose-400 font-bold' : 'text-slate-300'}>
-                          {log}
-                        </div>
-                      );
-                    })}
                   </div>
 
-                  {executionHistory.length > 0 && (
-                    <div className="border-t border-navy-light/10 pt-2 mt-2 overflow-x-auto whitespace-nowrap text-slate-450 flex items-center space-x-2">
-                      <span className="text-[9px] uppercase font-bold text-gray-500 shrink-0">History Stack:</span>
-                      <div className="flex gap-1 text-[9.5px]">
-                        {executionHistory.slice(-8).map((hist, idx) => (
-                          <span key={idx} className="bg-navy-deep/20 border border-navy-light/15 px-1.5 py-0.5 rounded text-slate-300">
-                            {hist}
+                  {/* Brushes */}
+                  <div>
+                    <span className="block text-[9.5px] uppercase font-black tracking-wider text-slate-450 mb-1.5">Brushes</span>
+                    <div className="flex gap-1.5">
+                      {[
+                        { name: 'red', color: 'bg-[#ef4444]' },
+                        { name: 'blue', color: 'bg-[#3b82f6]' },
+                        { name: 'green', color: 'bg-[#22c55e]' }
+                      ].map(brush => {
+                        const isSelected = selectedPaletteItem?.type === 'brush' && selectedPaletteItem?.name === brush.name;
+                        return (
+                          <button
+                            key={brush.name}
+                            draggable="true"
+                            onDragStart={(e) => handleDragStart(e, 'brush', brush.name)}
+                            onClick={() => setSelectedPaletteItem({ type: 'brush', name: brush.name })}
+                            className={`h-8 w-8 border flex items-center justify-center transition relative ${brush.color} ${
+                              isSelected ? 'ring-2 ring-[#0B2545] border-white' : 'border-slate-350'
+                            }`}
+                          >
+                            <span className="absolute bottom-0.5 right-0.5 text-[8px] text-white">🖌️</span>
+                          </button>
+                        );
+                      })}
+                      
+                      {/* Eraser */}
+                      <button
+                        draggable="true"
+                        onDragStart={(e) => handleDragStart(e, 'eraser', 'eraser')}
+                        onClick={() => setSelectedPaletteItem({ type: 'eraser', name: 'eraser' })}
+                        className={`px-2.5 py-1.5 border text-[10px] font-bold uppercase transition ${
+                          selectedPaletteItem?.type === 'eraser'
+                            ? 'bg-[#ef4444] text-white border-[#ef4444]'
+                            : 'bg-white border-slate-350 text-slate-700'
+                        }`}
+                      >
+                        Eraser
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t flex gap-2">
+                    <button
+                      onClick={clearAllSlots}
+                      className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 border text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center space-x-1.5"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Clear functions</span>
+                    </button>
+                    <button
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0 || isPlaying}
+                      className="p-2 border bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-50"
+                      title="Undo"
+                    >
+                      <Undo2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={handleRedo}
+                      disabled={redoStack.length === 0 || isPlaying}
+                      className="p-2 border bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-50"
+                      title="Redo"
+                    >
+                      <Redo2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                </div>
+
+                {/* FUNCTIONS AREA: F1 and F2 horizontal blocks (7 Cols) */}
+                <div className="md:col-span-7 bg-[#f8fafc] border border-slate-350 p-4 space-y-4">
+                  <span className="block text-[10px] font-black text-slate-450 uppercase tracking-widest mb-1.5">Functions</span>
+                  
+                  {/* F1 Block */}
+                  <div className="flex items-center space-x-3 bg-white p-2.5 border">
+                    <div className="h-8 w-8 bg-[#0B2545] text-white font-black text-xs uppercase flex items-center justify-center shrink-0">
+                      f1
+                    </div>
+                    <div className="flex-1 flex gap-1 overflow-x-auto whitespace-nowrap">
+                      {f1.map((slot, index) => (
+                        <div
+                          key={index}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => handleDropOnSlot(e, 'f1', index)}
+                          onClick={() => handleSlotClick('f1', index)}
+                          className={`relative h-10 w-10 border flex items-center justify-center cursor-pointer transition ${
+                            slot.cmd ? 'bg-slate-100 border-slate-450' : 'bg-white border-dashed border-slate-350 hover:border-slate-450'
+                          }`}
+                        >
+                          {/* Color marker condition badge */}
+                          {slot.cond && slot.cond !== 'none' && (
+                            <span className={`absolute top-0.5 left-0.5 h-2 w-2 rounded-full ${
+                              slot.cond === 'red' ? 'bg-[#ef4444]' :
+                              slot.cond === 'blue' ? 'bg-[#3b82f6]' :
+                              'bg-[#22c55e]'
+                            }`} />
+                          )}
+                          <span className="text-xs font-black uppercase text-slate-800">
+                            {getCmdSymbol(slot.cmd)}
                           </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* F2 Block */}
+                  {activeLevel.maxF2Slots > 0 && (
+                    <div className="flex items-center space-x-3 bg-white p-2.5 border pt-2 border-t">
+                      <div className="h-8 w-8 bg-[#0B2545] text-white font-black text-xs uppercase flex items-center justify-center shrink-0">
+                        f2
+                      </div>
+                      <div className="flex-1 flex gap-1 overflow-x-auto whitespace-nowrap">
+                        {f2.map((slot, index) => (
+                          <div
+                            key={index}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => handleDropOnSlot(e, 'f2', index)}
+                            onClick={() => handleSlotClick('f2', index)}
+                            className={`relative h-10 w-10 border flex items-center justify-center cursor-pointer transition ${
+                              slot.cmd ? 'bg-slate-100 border-slate-450' : 'bg-white border-dashed border-slate-350 hover:border-slate-450'
+                            }`}
+                          >
+                            {/* Color marker condition badge */}
+                            {slot.cond && slot.cond !== 'none' && (
+                              <span className={`absolute top-0.5 left-0.5 h-2 w-2 rounded-full ${
+                                slot.cond === 'red' ? 'bg-[#ef4444]' :
+                                slot.cond === 'blue' ? 'bg-[#3b82f6]' :
+                                'bg-[#22c55e]'
+                              }`} />
+                            )}
+                            <span className="text-xs font-black uppercase text-slate-800">
+                              {getCmdSymbol(slot.cmd)}
+                            </span>
+                          </div>
                         ))}
                       </div>
                     </div>
                   )}
                 </div>
+
               </div>
+
+              {/* Console Logs */}
+              <div className="bg-black p-4 rounded-none border font-mono text-[10.5px] text-slate-300 h-28 overflow-y-auto">
+                <span className="block text-gray-500 font-bold uppercase text-[9px] border-b border-navy-light/10 pb-1 mb-1">Execution output</span>
+                {terminalLogs.map((log, idx) => {
+                  const isSuccess = log.startsWith('🎉') || log.startsWith('✨');
+                  const isCrash = log.startsWith('❌') || log.startsWith('💥');
+                  return (
+                    <div key={idx} className={isSuccess ? 'text-emerald-400 font-bold' : isCrash ? 'text-rose-450 font-bold' : 'text-slate-300'}>
+                      {log}
+                    </div>
+                  );
+                })}
+              </div>
+
             </div>
           )}
 
           {/* TAB 2: ACTIVE PHASE TEST ASSESSMENTS */}
           {activeTab === 'test' && (
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6 max-w-2xl mx-auto">
+            <div className="bg-white border border-slate-300 p-6 space-y-6 max-w-2xl mx-auto">
               <div className="flex justify-between items-center border-b pb-4">
                 <div>
-                  <h3 className="text-lg font-black uppercase text-slate-800 flex items-center space-x-2">
-                    <ShieldCheck className="h-5 w-5 text-maple-red" />
-                    <span>Phase {activePhase} Logical Assessment</span>
+                  <h3 className="text-lg font-black uppercase text-slate-800">
+                    Phase {activePhase} Assessment
                   </h3>
                   <p className="text-xs text-slate-500 font-semibold mt-1">
                     Correctly answer all multiple-choice questions to unlock the next levels.
@@ -1224,7 +1630,7 @@ export default function LogicArena() {
                   </div>
 
                   {/* Question Prompt */}
-                  <div className="p-5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-sm text-slate-850 leading-relaxed">
+                  <div className="p-5 bg-slate-50 border border-slate-200 rounded-none font-semibold text-sm text-slate-850 leading-relaxed">
                     {PHASE_QUIZZES[activePhase][quizIdx].q}
                   </div>
 
@@ -1236,9 +1642,9 @@ export default function LogicArena() {
                         <button
                           key={oIdx}
                           onClick={() => handleSelectQuizOption(oIdx)}
-                          className={`w-full text-left p-4 rounded-xl text-xs font-bold border transition-all ${
+                          className={`w-full text-left p-4 rounded-none text-xs font-bold border transition-all ${
                             isSelected
-                              ? 'bg-navy-deep border-navy-deep text-white shadow-md'
+                              ? 'bg-[#0B2545] border-[#0B2545] text-white shadow-md'
                               : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
                           }`}
                         >
@@ -1252,10 +1658,9 @@ export default function LogicArena() {
                     <button
                       onClick={submitQuizAnswer}
                       disabled={quizAnswers[quizIdx] === undefined}
-                      className="px-6 py-3 bg-navy-deep hover:bg-maple-red text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md transition disabled:opacity-50 flex items-center space-x-1"
+                      className="px-6 py-3 bg-[#0B2545] hover:bg-maple-red text-white text-xs font-black uppercase tracking-wider rounded-none shadow-md transition disabled:opacity-50"
                     >
                       <span>{quizIdx + 1 === PHASE_QUIZZES[activePhase].length ? 'Finish Quiz' : 'Next Question'}</span>
-                      <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -1271,9 +1676,8 @@ export default function LogicArena() {
                       </p>
                       <button
                         onClick={startQuiz}
-                        className="inline-flex items-center space-x-1 bg-navy-deep hover:bg-maple-red text-white font-black uppercase tracking-wider text-xs px-6 py-3 rounded-xl shadow transition"
+                        className="inline-flex items-center bg-[#0B2545] hover:bg-maple-red text-white font-black uppercase tracking-wider text-xs px-6 py-3 rounded-none shadow transition"
                       >
-                        <RefreshCw className="h-4 w-4" />
                         <span>Retry Assessment</span>
                       </button>
                     </div>
@@ -1287,18 +1691,16 @@ export default function LogicArena() {
                       </p>
                       <button
                         onClick={() => {
-                          // Go to next unlocked phase if applicable
                           const nextP = activePhase + 1;
-                          if (nextP <= 3 && unlockedPhases.includes(nextP)) {
+                          if (nextP <= 5 && unlockedPhases.includes(nextP)) {
                             handlePhaseChange(nextP);
                           } else {
                             setActiveTab('games');
                           }
                         }}
-                        className="inline-flex items-center space-x-1.5 bg-navy-deep hover:bg-maple-red text-white font-black uppercase tracking-wider text-xs px-6 py-3 rounded-xl shadow transition"
+                        className="inline-flex bg-[#0B2545] hover:bg-maple-red text-white font-black uppercase tracking-wider text-xs px-6 py-3 rounded-none shadow transition"
                       >
                         <span>Continue Logic Path</span>
-                        <ChevronRight className="h-4 w-4" />
                       </button>
                     </div>
                   )}
@@ -1306,8 +1708,187 @@ export default function LogicArena() {
               )}
             </div>
           )}
+
         </div>
       </div>
     </div>
   );
 }
+
+interface QuizQuestion {
+  q: string;
+  options: string[];
+  correct: number;
+}
+
+const PHASE_QUIZZES: Record<number, QuizQuestion[]> = {
+  1: [
+    {
+      q: "What happens if a robot is at row 7, column 3 facing East and receives the commands [Move Forward, Move Forward]?",
+      options: [
+        "It moves to row 7, column 5, facing East",
+        "It moves to row 5, column 3, facing North",
+        "It moves to row 7, column 5, facing West",
+        "It moves to row 9, column 3, facing South"
+      ],
+      correct: 0
+    },
+    {
+      q: "If the robot faces North and receives the command 'Turn Right' (CW), which direction is it facing now?",
+      options: ["South", "West", "East", "North"],
+      correct: 2
+    },
+    {
+      q: "What is the purpose of the gray grid cells in the play area?",
+      options: [
+        "They are walkable paths",
+        "They represent walls/obstacles that cause a crash if stepped on",
+        "They automatically paint the robot red",
+        "They are star targets to collect"
+      ],
+      correct: 1
+    }
+  ],
+  2: [
+    {
+      q: "If the current tile color is Red, and a command has a Green condition marker attached to it, will the command execute?",
+      options: [
+        "Yes, green matches red",
+        "No, because the tile color (Red) does not match the green condition",
+        "Yes, but it paints the tile green first",
+        "It causes an immediate program crash"
+      ],
+      correct: 1
+    },
+    {
+      q: "How can you make a robot turn only when stepping on a Blue tile?",
+      options: [
+        "Add a 'Turn Right' or 'Turn Left' command and set its condition to Blue",
+        "Color the tile red using a brush tool",
+        "Write a separate function F2 and call it always",
+        "Press the play button twice when on a blue tile"
+      ],
+      correct: 0
+    },
+    {
+      q: "If a command has the condition 'Always' (none), when will it execute?",
+      options: [
+        "Only on white/empty path tiles",
+        "On any tile color, regardless of what color the robot is stepping on",
+        "Only on red, blue, and green colored tiles",
+        "Only when calling F1 recursively"
+      ],
+      correct: 1
+    }
+  ],
+  3: [
+    {
+      q: "What is recursion in the context of programming logic in RoboZZle?",
+      options: [
+        "A function calling itself (e.g., F1 containing a call to F1)",
+        "Executing commands step-by-step manually",
+        "Clearing all function slots with the trash button",
+        "Stepping off the boundaries of the grid"
+      ],
+      correct: 0
+    },
+    {
+      q: "If F1 contains: [Move Forward, Call F2] and F2 contains [Turn Left, Call F1], what behavior does this create?",
+      options: [
+        "The robot moves once, turns left, and halts",
+        "An alternating loop of moving forward and turning left indefinitely",
+        "The robot crashes immediately on start",
+        "The robot paints all cells on its path red"
+      ],
+      correct: 1
+    },
+    {
+      q: "What happens if a function executes its last command slot and the call stack is empty?",
+      options: [
+        "The robot crashes because it has no instructions",
+        "The execution halts successfully (victory if all stars are collected)",
+        "The robot restarts from the start cell automatically",
+        "It triggers a Call F1 by default"
+      ],
+      correct: 1
+    }
+  ],
+  4: [
+    {
+      q: "What is the stack depth limit in this logic arena execution engine?",
+      options: ["10 calls", "50 calls", "100 calls", "Infinite"],
+      correct: 1
+    },
+    {
+      q: "If you want to create a recursive loop that terminates when a star is collected, what is the best strategy?",
+      options: [
+        "Use conditional paint commands to change tile colors, then use color-conditional recursive calls",
+        "Fill all slots of F1 and F2 with the Move Forward command",
+        "Decrease the speed control slider to slow execution",
+        "Manually click pause when the robot is on the star"
+      ],
+      correct: 0
+    },
+    {
+      q: "In a nested recursion F1 -> F2 -> F1, how are the return pointers managed?",
+      options: [
+        "Using a stack (LIFO) where each function call pushes a new frame and returning pops it",
+        "They are stored in localStorage",
+        "Using a queue (FIFO) where calls are executed in sequence",
+        "They are not managed, causing an immediate crash"
+      ],
+      correct: 0
+    }
+  ],
+  5: [
+    {
+      q: "What does the Paint Red command do when executed?",
+      options: [
+        "Paints the cell the robot is currently standing on Red",
+        "Paints the cell in front of the robot Red",
+        "Paints the entire path Red",
+        "Checks if the current cell is Red"
+      ],
+      correct: 0
+    },
+    {
+      q: "How can painting tiles dynamically help in solving infinite loops on blank maps?",
+      options: [
+        "By marking cells so the robot can use color conditions to turn or change behavior on future visits",
+        "By increasing the player's star score",
+        "It disables the boundaries of the grid",
+        "It automatically collects nearby stars"
+      ],
+      correct: 0
+    },
+    {
+      q: "For expert puzzles, what is the key to optimizing code to fit within the small slot budget?",
+      options: [
+        "Using recursion and color-based conditional triggers to reuse instruction sequences",
+        "Adding more slots to F1 in the level editor",
+        "Pasting the same commands in all slots of F1 and F2",
+        "Pressing the Step button very rapidly"
+      ],
+      correct: 0
+    }
+  ]
+};
+
+// Helpers
+const createEmptyGrid = (rows: number, cols: number, color: Cell['color'] = 'gray'): Cell[][] => {
+  return Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => ({ color, hasStar: false }))
+  );
+};
+
+const getCmdSymbol = (cmd: CommandSlot['cmd']) => {
+  if (cmd === 'up') return '↑';
+  if (cmd === 'ccw') return '↺';
+  if (cmd === 'cw') return '↻';
+  if (cmd === 'f1') return 'F1';
+  if (cmd === 'f2') return 'F2';
+  if (cmd === 'paint_red') return '🎨R';
+  if (cmd === 'paint_green') return '🎨G';
+  if (cmd === 'paint_blue') return '🎨B';
+  return '';
+};

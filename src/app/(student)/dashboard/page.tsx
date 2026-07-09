@@ -34,7 +34,7 @@ const AVATAR_TEMPLATES = [
 ];
 
 export default function StudentDashboard() {
-  const { profile, student, notifications, refreshUser } = useApp();
+  const { profile, student, notifications, refreshUser, loginStreak } = useApp();
   const [activeMission, setActiveMission] = useState<any>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [badgesCount, setBadgesCount] = useState(0);
@@ -43,14 +43,20 @@ export default function StudentDashboard() {
   useEffect(() => {
     async function loadDashboardData() {
       if (profile && student) {
-        // Load missions and find next incomplete mission
-        const allMissions = await dbService.getMissions();
+        // Load missions and courses, then find next incomplete mission for student's grade
+        const [allMissions, courses] = await Promise.all([
+          dbService.getMissions(),
+          dbService.getCourses()
+        ]);
         const progress = await dbService.getStudentProgress(student.id);
         const completedMissionIds = progress
           .filter((p: any) => !p.lesson_id && !p.challenge_id && p.status === 'completed')
           .map((p: any) => p.mission_id);
         
-        const nextMission = allMissions.find((m: any) => !completedMissionIds.includes(m.id) && m.is_published) || allMissions[0];
+        const studentCourses = courses.filter((c: any) => c.grade === student.grade);
+        const gradeMissions = allMissions.filter((m: any) => studentCourses.some((sc: any) => sc.id === m.course_id));
+
+        const nextMission = gradeMissions.find((m: any) => !completedMissionIds.includes(m.id) && m.is_published) || gradeMissions[0] || null;
         setActiveMission(nextMission);
 
         // Load badges count
@@ -118,7 +124,7 @@ export default function StudentDashboard() {
 
           <div className="hidden lg:flex items-center space-x-2 text-gold-accent text-xs font-black uppercase tracking-wider bg-navy-medium/40 border border-navy-light/30 rounded-xl px-4 py-3 shadow-inner">
             <Flame className="h-5 w-5 fill-current text-orange-500 animate-bounce" />
-            <span>Daily Streak: 3 Days</span>
+            <span>Daily Streak: {loginStreak} Day{loginStreak !== 1 ? 's' : ''}</span>
           </div>
         </div>
       </div>

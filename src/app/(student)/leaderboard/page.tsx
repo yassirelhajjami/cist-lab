@@ -200,7 +200,7 @@ export default function LeaderboardPage() {
                         {/* Avatar */}
                         <div className="relative">
                           <img
-                            src={player.avatar_url}
+                            src={player.avatar_url || undefined}
                             alt={player.name}
                             className="h-12 w-12 rounded-full border-2 bg-white object-contain border-navy-deep"
                           />
@@ -241,7 +241,7 @@ export default function LeaderboardPage() {
                     >
                       <div className="flex items-center space-x-3">
                         <span className="w-5 text-center text-slate-400 font-bold">{idx + 4}</span>
-                        <img src={player.avatar_url} alt="av" className="h-8 w-8 rounded-full border bg-white shrink-0 object-contain" />
+                        <img src={player.avatar_url || undefined} alt="av" className="h-8 w-8 rounded-full border bg-white shrink-0 object-contain" />
                         <div>
                           <div className="flex items-center space-x-2">
                             <span className="text-slate-850 font-black">{player.name}</span>

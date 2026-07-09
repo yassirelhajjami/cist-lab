@@ -147,6 +147,15 @@ CREATE TABLE IF NOT EXISTS public.project_votes (
     CONSTRAINT unique_project_student_vote UNIQUE (project_id, student_id)
 );
 
+-- 10a. post_likes table
+CREATE TABLE IF NOT EXISTS public.post_likes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID NOT NULL REFERENCES public.community_posts(id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    CONSTRAINT post_likes_post_student_unique UNIQUE (post_id, student_id)
+);
+
 -- 11. badges table
 CREATE TABLE IF NOT EXISTS public.badges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -207,6 +216,7 @@ ALTER TABLE public.badges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.student_badges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leaderboard_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.post_likes ENABLE ROW LEVEL SECURITY;
 
 -- Dynamic functions to determine role
 CREATE OR REPLACE FUNCTION public.is_admin()
@@ -447,6 +457,29 @@ CREATE POLICY "Students can retract vote" ON public.project_votes
     );
 
 CREATE POLICY "Admins have full access on votes" ON public.project_votes
+    FOR ALL USING (public.is_admin());
+
+-- 10a. post_likes policies
+CREATE POLICY "Likes are viewable by everyone" ON public.post_likes
+    FOR SELECT USING (true);
+
+CREATE POLICY "Students can like" ON public.post_likes
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM public.students 
+            WHERE id = student_id AND profile_id IN (SELECT id FROM public.profiles WHERE user_id = auth.uid())
+        )
+    );
+
+CREATE POLICY "Students can unlike" ON public.post_likes
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM public.students 
+            WHERE id = student_id AND profile_id IN (SELECT id FROM public.profiles WHERE user_id = auth.uid())
+        )
+    );
+
+CREATE POLICY "Admins have full access on likes" ON public.post_likes
     FOR ALL USING (public.is_admin());
 
 -- 11. Badges Policies

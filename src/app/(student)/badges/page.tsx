@@ -4,11 +4,11 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { dbService } from '@/lib/db';
-import { Award, Lock, Sparkles, Star, Target, CheckCircle2 } from 'lucide-react';
+import { Award, Lock, Target, CheckCircle2 } from 'lucide-react';
 import { BadgeIcon } from '@/components/ui/BadgeIcon';
 
 export default function BadgesPage() {
-  const { student, profile } = useApp();
+  const { student, loading: appLoading } = useApp();
   
   const [allBadges, setAllBadges] = useState<any[]>([]);
   const [earnedBadges, setEarnedBadges] = useState<any[]>([]);
@@ -16,7 +16,11 @@ export default function BadgesPage() {
 
   useEffect(() => {
     async function loadBadgesData() {
-      if (!student) return;
+      if (appLoading) return;
+      if (!student) {
+        setLoading(false);
+        return;
+      }
       try {
         const badges = await dbService.getBadges();
         const earned = await dbService.getStudentBadges(student.id);
@@ -29,7 +33,7 @@ export default function BadgesPage() {
       }
     }
     loadBadgesData();
-  }, [student]);
+  }, [student, appLoading]);
 
   if (loading) {
     return (
