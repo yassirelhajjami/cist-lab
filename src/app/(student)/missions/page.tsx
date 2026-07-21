@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { dbService } from '@/lib/db';
 import Link from 'next/link';
-import { Map, Star, Trophy, Sparkles, Filter, ChevronRight, Award, GraduationCap, Gamepad2, BookOpen } from 'lucide-react';
+import { Map, ChevronRight } from 'lucide-react';
 
 export default function MissionsPage() {
   const { student, profile, loading: appLoading } = useApp();
@@ -112,16 +112,18 @@ export default function MissionsPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-7 pb-10">
       {/* Page header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 border-b border-slate-200 pb-6">
+      <div className="quest-card relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-5 p-6 md:p-7">
+        <div className="absolute right-[-3rem] top-[-4rem] h-40 w-40 rounded-full bg-emerald-100" />
         <div>
-          <h2 className="text-2xl font-black uppercase text-slate-800 tracking-tight flex items-center space-x-2">
-            <Map className="h-6 w-6 text-navy-deep" />
-            <span>K-12 CS Learning Pathways</span>
+          <span className="quest-kicker">Choose your next destination</span>
+          <h2 className="mt-1 text-3xl font-black text-slate-900 tracking-tight flex items-center space-x-2">
+            <Map className="h-7 w-7 text-emerald-600" />
+            <span>Quest Map</span>
           </h2>
-          <p className="text-xs text-slate-500 uppercase font-semibold mt-1 tracking-wider">
-            Explore our curriculum structured for Grade 1 through Grade 12
+          <p className="text-sm text-slate-500 font-semibold mt-1">
+            Follow the trail, master new coding powers, and collect every star.
           </p>
         </div>
 
@@ -142,8 +144,8 @@ export default function MissionsPage() {
               onClick={() => setSelectedCourseId('all')}
               className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${
                 selectedCourseId === 'all'
-                  ? 'bg-navy-deep text-white shadow-md shadow-navy-deep/20'
-                  : 'bg-white border border-slate-200 text-slate-650 hover:bg-slate-50'
+                  ? 'quest-button bg-emerald-600 text-white shadow-md'
+                  : 'bg-white border-2 border-slate-200 text-slate-600 hover:border-emerald-300'
               }`}
             >
               All Courses
@@ -155,8 +157,8 @@ export default function MissionsPage() {
               onClick={() => setSelectedCourseId(c.id)}
               className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${
                 selectedCourseId === c.id
-                  ? 'bg-navy-deep text-white shadow-md shadow-navy-deep/20'
-                  : 'bg-white border border-slate-200 text-slate-650 hover:bg-slate-50'
+                  ? 'quest-button bg-emerald-600 text-white shadow-md'
+                  : 'bg-white border-2 border-slate-200 text-slate-600 hover:border-emerald-300'
               }`}
             >
               {c.title}
@@ -171,7 +173,7 @@ export default function MissionsPage() {
           const currentCourse = courses.find(c => c.id === selectedCourseId);
           if (!currentCourse) return null;
           return (
-            <div className={`p-5 rounded-2xl border flex items-start gap-4 ${getCourseBadgeColor(currentCourse.color_theme)}`}>
+            <div className={`quest-card p-5 flex items-start gap-4 ${getCourseBadgeColor(currentCourse.color_theme)}`}>
               <div className="h-10 w-10 shrink-0 rounded-xl bg-white/80 flex items-center justify-center text-lg shadow-sm">
                 {currentCourse.color_theme === 'emerald' ? '🎮' : currentCourse.color_theme === 'amber' ? '📖' : '🎓'}
               </div>
@@ -193,8 +195,8 @@ export default function MissionsPage() {
             onClick={() => setFilterCategory(cat)}
             className={`px-3 py-1 rounded-full font-bold transition ${
               filterCategory === cat
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-emerald-700 text-white shadow-sm'
+                : 'bg-white border-2 border-emerald-100 text-slate-600 hover:border-emerald-300'
             }`}
           >
             {cat}
@@ -204,7 +206,7 @@ export default function MissionsPage() {
 
       {/* Grid listing */}
       {filteredMissions.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-xl border border-slate-200 p-8">
+        <div className="quest-card text-center py-20 p-8">
           <div className="text-4xl">🏜️</div>
           <h3 className="mt-4 text-sm font-bold text-slate-700">No Missions Found</h3>
           <p className="text-xs text-slate-500 mt-1">There are no missions currently assigned to your grade path.</p>
@@ -219,15 +221,15 @@ export default function MissionsPage() {
             return (
               <div
                 key={m.id}
-                className={`group rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md hover:border-navy-light/45 duration-200 flex flex-col justify-between ${
-                  isCompleted ? 'border-emerald-250 bg-emerald-50/10' : 'border-slate-200'
+                className={`quest-card quest-card-hover group p-5 md:p-6 flex flex-col justify-between ${
+                  isCompleted ? 'border-emerald-300 bg-emerald-50/40' : ''
                 }`}
               >
                 <div>
                   {/* Category Tag & Grade Badge */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <span className="bg-navy-deep text-white px-2 py-0.5 rounded text-[9px] uppercase font-black tracking-widest leading-none">
+                      <span className="bg-emerald-700 text-white px-3 py-1 rounded-full text-[9px] uppercase font-black tracking-widest leading-none">
                         {m.category}
                       </span>
                       {correspondingCourse && (
@@ -257,10 +259,10 @@ export default function MissionsPage() {
                     <span>Pathway Progress</span>
                     <span>{prog.completed} / {prog.total} Completed ({prog.pct}%)</span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 border border-slate-200/50">
+                  <div className="quest-progress h-3 w-full">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
-                        isCompleted ? 'bg-emerald-500' : 'bg-navy-deep'
+                        isCompleted ? 'bg-emerald-500' : 'bg-emerald-500'
                       }`}
                       style={{ width: `${prog.pct}%` }}
                     ></div>
@@ -283,7 +285,7 @@ export default function MissionsPage() {
                     className={`flex items-center space-x-1.5 rounded-lg px-4.5 py-2 text-xs font-bold transition duration-200 ${
                       isCompleted
                         ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                        : 'bg-navy-deep hover:bg-maple-red text-white'
+                        : 'quest-button bg-emerald-600 hover:bg-emerald-700 text-white'
                     }`}
                   >
                     <span>{isCompleted ? 'Review Path' : prog.pct > 0 ? 'Continue' : 'Start Path'}</span>

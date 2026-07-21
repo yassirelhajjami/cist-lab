@@ -73,16 +73,18 @@ export async function triggerWebhookAlert(
   };
 
   try {
-    const response = await fetch(webhookUrl, {
+    const response = await fetch('/api/webhook', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ webhookUrl, payload })
     });
 
     if (!response.ok) {
-      throw new Error(`Webhook endpoint returned status ${response.status}`);
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `Server responded with status ${response.status}`);
     }
     console.log('Webhook dispatched successfully!');
+    return { success: true };
   } catch (err: any) {
     console.error('Failed to dispatch webhook fetch event:', err);
     // Append error log
@@ -92,5 +94,6 @@ export async function triggerWebhookAlert(
       logs.unshift(`[${new Date().toISOString()}] ❌ WEBHOOK ERROR: ${err.message}`);
       localStorage.setItem('cist_cq_webhook_logs', JSON.stringify(logs.slice(0, 50)));
     } catch {}
+    return { success: false, error: err.message };
   }
 }

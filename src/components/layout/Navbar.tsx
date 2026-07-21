@@ -7,6 +7,7 @@ import { XP_LEVELS } from '@/lib/db';
 import { Bell, Coins, Flame, LogOut, ShieldAlert, Sparkles, User, Check } from 'lucide-react';
 import Link from 'next/link';
 import { dbService } from '@/lib/db';
+import { GameIcon } from '@/components/ui/GameIcon';
 
 export function getXpProgress(xp: number) {
   let prevThreshold = 0;
@@ -72,25 +73,25 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-navy-light/20 bg-navy-dark px-6 text-white shadow-md">
+    <header className={`sticky top-0 z-40 flex h-[4.5rem] w-full items-center justify-between px-4 md:px-6 text-white shadow-lg ${isAdmin ? 'bg-navy-dark' : 'bg-gradient-to-r from-emerald-800 via-teal-700 to-sky-700'} border-b border-white/15`}>
       {/* Brand Logo & Name */}
       <div className="flex items-center space-x-3">
         <Link href={isAdmin ? '/admin' : '/dashboard'} className="flex items-center space-x-2">
           <img 
             src="/cist.png" 
             alt="CIST Logo" 
-            className="h-10 w-10 object-contain rounded-xl shadow-lg border border-navy-light/10 bg-white p-0.5" 
+            className="h-11 w-11 object-contain rounded-2xl shadow-lg border-2 border-white/70 bg-white p-0.5"
             onError={(e) => {
               e.currentTarget.onerror = null;
               e.currentTarget.src = 'https://api.dicebear.com/7.x/pixel-art/svg?seed=cist';
             }}
           />
           <div>
-            <h1 className="text-lg font-black tracking-tight uppercase leading-none">
-              CIST <span className="text-gold-accent">CodeQuest</span>
+            <h1 className="text-lg font-black tracking-tight leading-none">
+              CIST <span className="text-yellow-300">CodeQuest</span>
             </h1>
             <span className="text-[10px] tracking-widest text-gray-400 uppercase">
-              Canadian Int. School Tangier
+              Learn • Build • Play
             </span>
           </div>
         </Link>
@@ -101,7 +102,7 @@ export default function Navbar() {
         <div className="hidden md:flex items-center space-x-6">
           {/* Level Indicator */}
           <div className="flex items-center space-x-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-accent text-navy-dark font-black text-sm shadow-md">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-yellow-300 text-emerald-950 font-black text-sm shadow-md border-b-4 border-yellow-500">
               {profile.level}
             </div>
             <div className="w-32 lg:w-44">
@@ -109,7 +110,7 @@ export default function Navbar() {
                 <span>XP Progress</span>
                 <span>{profile.xp} / {xpInfo.nextThreshold}</span>
               </div>
-              <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-navy-medium border border-navy-light/30">
+              <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-black/20 border border-white/15 p-0.5">
                 <div
                   className="h-full rounded-full gold-gradient shadow-[0_0_8px_#D4AF37]"
                   style={{ width: `${xpInfo.percentage}%` }}
@@ -119,13 +120,13 @@ export default function Navbar() {
           </div>
 
           {/* Coins Count */}
-          <div className="flex items-center space-x-1.5 rounded-full bg-navy-medium/60 px-3.5 py-1.5 border border-navy-light/30 shadow-inner">
+          <div className="flex items-center space-x-1.5 rounded-2xl bg-white/12 px-3.5 py-2 border border-white/15 shadow-inner">
             <Coins className="h-4.5 w-4.5 text-gold-accent animate-pulse" />
             <span className="text-sm font-bold text-gold-accent">{profile.coins}</span>
           </div>
 
           {/* Daily Streak (Mocked 3 days streak initially) */}
-          <div className="flex items-center space-x-1.5 rounded-full bg-maple-red/25 px-3.5 py-1.5 border border-maple-red/35 shadow-sm text-maple-light">
+          <div className="flex items-center space-x-1.5 rounded-2xl bg-orange-500/25 px-3.5 py-2 border border-orange-200/20 shadow-sm text-orange-100">
             <Flame className="h-4.5 w-4.5 fill-current animate-bounce" />
             <span className="text-sm font-bold">{loginStreak} Day{loginStreak !== 1 ? 's' : ''} Streak</span>
           </div>
@@ -185,9 +186,10 @@ export default function Navbar() {
                         !n.is_read ? 'bg-navy-light/10' : ''
                       }`}
                     >
-                      <div className="text-lg">
-                        {n.type === 'badge' ? '🏆' : n.type === 'xp' ? '⚡' : n.type === 'project' ? '🎨' : '🔔'}
-                      </div>
+                      <GameIcon
+                        name={n.type === 'badge' ? 'trophy' : n.type === 'xp' ? 'xp' : n.type === 'project' ? 'palette' : 'bell'}
+                        className="h-9 w-9 shrink-0"
+                      />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold leading-tight">{n.title}</p>
                         <p className="text-[11px] text-gray-300 mt-0.5 leading-snug">{n.message}</p>

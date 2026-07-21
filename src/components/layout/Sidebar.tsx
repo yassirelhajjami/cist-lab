@@ -18,14 +18,13 @@ import {
   UserCircle,
   Menu,
   X,
-  PlusSquare,
   Shield,
   FileSpreadsheet,
   Settings,
   ListTodo,
   FolderLock,
-  Joystick,
-  Blocks
+  Blocks,
+  Puzzle
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -39,13 +38,13 @@ export default function Sidebar() {
 
   // Student Navigation Links — split into two groups
   const studentMainLinks = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Missions Path', href: '/missions', icon: Map },
-    { name: 'Arcade', href: '/arcade', icon: Joystick },
-    { name: 'Scratch Studio', href: '/scratch', icon: Blocks },
-    { name: 'Logic Arena', href: '/games', icon: Gamepad2 },
-    { name: 'Code Lab', href: '/code-lab', icon: Code2 },
-    { name: 'Robotics Lab', href: '/robotics-lab', icon: Cpu },
+    { name: 'My Basecamp', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Quest Map', href: '/missions', icon: Map },
+    { name: 'Block Jungle', href: '/scratch', icon: Blocks },
+    { name: 'Puzzle Temple', href: '/games', icon: Puzzle },
+    { name: 'Code Arcade', href: '/arcade', icon: Gamepad2 },
+    { name: 'Code Workshop', href: '/code-lab', icon: Code2 },
+    { name: 'Robot Garage', href: '/robotics-lab', icon: Cpu },
   ];
 
   const studentSocialLinks = [
@@ -71,8 +70,6 @@ export default function Sidebar() {
     { name: 'Settings', href: '/admin/settings', icon: Settings }
   ];
 
-  const links = isAdmin ? adminLinks : studentMainLinks;
-
   const renderNavLink = (link: { name: string; href: string; icon: React.ElementType }) => {
     const Icon = link.icon;
     const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
@@ -81,27 +78,29 @@ export default function Sidebar() {
         key={link.href}
         href={link.href}
         onClick={() => setMobileOpen(false)}
-        className={`flex items-center space-x-3 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
+        className={`group flex items-center space-x-3 rounded-2xl px-3.5 py-2.5 text-sm font-extrabold transition-all duration-200 ${
           isActive
-            ? 'bg-maple-red text-white shadow-md border-l-4 border-gold-accent'
-            : 'text-gray-300 hover:bg-navy-medium hover:text-white'
+            ? 'bg-white text-emerald-900 shadow-lg shadow-emerald-950/15 border-b-4 border-emerald-300'
+            : 'text-emerald-50/80 hover:bg-white/10 hover:text-white hover:translate-x-1'
         }`}
       >
-        <Icon className={`h-4.5 w-4.5 ${isActive ? 'text-gold-accent' : 'text-gray-400'}`} />
+        <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-white/8 text-emerald-100 group-hover:bg-white/15'}`}>
+          <Icon className="h-4.5 w-4.5" />
+        </span>
         <span>{link.name}</span>
       </Link>
     );
   };
 
   // Top nav section — learning tools
-  const TopNav = () => (
+  const topNav = (
     <nav className="flex flex-col p-4 space-y-1">
       {(isAdmin ? adminLinks : studentMainLinks).map(renderNavLink)}
     </nav>
   );
 
   // Bottom nav section — social & profile (students only)
-  const BottomNav = () =>
+  const bottomNav =
     !isAdmin ? (
       <div className="border-t border-navy-light/20 p-4 space-y-1">
         <span className="block px-1 pb-1 text-[9px] font-black uppercase tracking-widest text-slate-500">Social</span>
@@ -125,24 +124,25 @@ export default function Sidebar() {
       </div>
 
       {/* Desktop Drawer Sidebar */}
-      <aside className="hidden lg:flex w-64 flex-col bg-navy-deep border-r border-navy-light/25 text-white h-[calc(100vh-4rem)] sticky top-16">
+      <aside className={`hidden lg:flex w-72 flex-col text-white h-[calc(100vh-4.5rem)] sticky top-[4.5rem] ${isAdmin ? 'bg-navy-deep' : 'bg-gradient-to-b from-emerald-800 via-emerald-800 to-teal-900'} border-r border-white/10`}>
         {/* Header */}
         <div className="p-4 border-b border-navy-light/20 flex items-center space-x-2 flex-shrink-0">
           {isAdmin ? (
             <Shield className="h-5 w-5 text-gold-accent" />
           ) : (
-            <FolderLock className="h-5 w-5 text-maple-light" />
+            <FolderLock className="h-5 w-5 text-yellow-300" />
           )}
           <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">
-            {isAdmin ? 'ADMIN NAVIGATION' : 'QUEST NAVIGATION'}
+            {isAdmin ? 'ADMIN NAVIGATION' : 'CHOOSE YOUR ADVENTURE'}
           </span>
         </div>
         {/* Scrollable top links */}
         <div className="flex-1 overflow-y-auto">
-          <TopNav />
+          {topNav}
         </div>
         {/* Social links pinned to bottom */}
-        <BottomNav />
+        {bottomNav}
+        {!isAdmin && <div className="mx-4 mb-4 rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-[10px] font-bold leading-relaxed text-emerald-100/70">Tip: every quest earns XP, coins, and new badges. Keep exploring!</div>}
       </aside>
 
       {/* Mobile Drawer Slide-out overlay */}
@@ -161,9 +161,9 @@ export default function Sidebar() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto mt-2">
-              <TopNav />
+              {topNav}
             </div>
-            <BottomNav />
+            {bottomNav}
           </div>
           <div className="flex-grow" onClick={() => setMobileOpen(false)}></div>
         </div>

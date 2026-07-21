@@ -1,1404 +1,1291 @@
 // src/app/(student)/arcade/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { useApp } from '@/context/AppContext';
-import Link from 'next/link';
 import {
-  Gamepad2, Trophy, CheckCircle2, Play, X, ExternalLink,
-  Zap, Coins, BookOpen, Sparkles, Info
+  Play,
+  RotateCcw,
+  Sparkles,
+  Gamepad2,
+  Lock,
+  Star,
+  Award,
+  ChevronRight,
+  BookOpen,
+  Volume2,
+  VolumeX,
+  Plus,
+  Trash2,
+  ArrowRight,
+  HelpCircle,
+  Undo2,
+  Flame,
+  CheckCircle2,
+  ChevronLeft
 } from 'lucide-react';
+import {
+  GRADE_NAMES,
+  getLevelsForGrade,
+  LevelDef,
+  BlockType
+} from './level-defs';
+import {
+  playJumpSound,
+  playCollectSound,
+  playChestSound,
+  playSuccessSound,
+  playFailSound
+} from './audio';
+import { LEARNING_STAGES } from './learning-games';
+import { StageGameExperience } from './stage-experience';
+import { GameIcon, GameIconName } from '@/components/ui/GameIcon';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DATA
-// ─────────────────────────────────────────────────────────────────────────────
-interface ArcadeGame {
+// Program instruction representation
+interface CommandItem {
   id: string;
-  title: string;
-  description: string;
-  platform: 'scratch' | 'blockly';
-  embedUrl: string;
-  externalUrl: string;
-  thumbnail: string;          // emoji used as fallback icon
-  subject: string;
-  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
-  xpReward: number;
-  coinReward: number;
-  tags: string[];
-  embedWidth: number;
-  embedHeight: number;
-  isNew?: boolean;
-  gradeBands: string[];       // e.g. ['1-2', '3-4']
+  type: BlockType;
+  // For repeat blocks: loop configuration
+  loopAction?: 'forward' | 'backward' | 'jump' | 'turn_left';
+  loopCount?: number;
 }
 
-const SCRATCH_GAMES: ArcadeGame[] = [
-  // --- GRADES 1-2 ---
-  {
-    id: 'scratch-maze',
-    title: 'Maze Runner',
-    description: 'Navigate a sprite through a maze using arrow keys. Observe how collision detection and coordinate tracking are used to create puzzle gameplay.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/104/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/104/',
-    thumbnail: '🌀',
-    subject: 'Coordinates & Collision',
-    difficulty: 'Beginner',
-    xpReward: 40,
-    coinReward: 15,
-    tags: ['coordinates', 'user input', 'sensing'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['1-2']
-  },
-  {
-    id: 'scratch-clicker',
-    title: 'Balloon Clicker Game',
-    description: 'Pop as many balloons as you can before the timer runs out! A great way to understand click event listeners, score variables, and random balloon spawning.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/11725619/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/11725619/',
-    thumbnail: '🎈',
-    subject: 'Click Events & Variables',
-    difficulty: 'Beginner',
-    xpReward: 40,
-    coinReward: 15,
-    tags: ['variables', 'events', 'timer'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['1-2']
-  },
-
-  // --- GRADES 3-4 ---
-  {
-    id: 'scratch-pong',
-    title: 'Pong Classic',
-    description: 'The legendary Pong game — study how ball physics, paddle collisions, and score tracking are implemented in Scratch. A perfect introduction to game loops and conditionals.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/10128407/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/10128407/',
-    thumbnail: '🏓',
-    subject: 'Game Logic & Loops',
-    difficulty: 'Beginner',
-    xpReward: 40,
-    coinReward: 15,
-    tags: ['loops', 'conditionals', 'events'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['3-4']
-  },
-  {
-    id: 'scratch-flappy',
-    title: 'Flappy Bird Premium',
-    description: 'Fly through pipes in this smooth remake by griffpatch. Demystifies scrolling backgrounds, velocity gravity calculations, and hitboxes.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/92679233/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/92679233/',
-    thumbnail: '🐤',
-    subject: 'Gravity & Scrolling',
-    difficulty: 'Intermediate',
-    xpReward: 50,
-    coinReward: 20,
-    tags: ['gravity', 'physics', 'clones'],
-    embedWidth: 485,
-    embedHeight: 402,
-    isNew: true,
-    gradeBands: ['3-4']
-  },
-
-  // --- GRADES 5-6 ---
-  {
-    id: 'scratch-pacman',
-    title: 'Pac-Man Arcade',
-    description: 'Classic maze game. Study sprite coordinates tracking, layout collision paths, and AI ghost behaviors chasing the player.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/27533816/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/27533816/',
-    thumbnail: '🟡',
-    subject: 'AI Pathing & Tiles',
-    difficulty: 'Intermediate',
-    xpReward: 60,
-    coinReward: 25,
-    tags: ['pathing', 'grid', 'arrays'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['5-6']
-  },
-  {
-    id: 'scratch-invaders',
-    title: 'Space Invaders',
-    description: 'Protect the galaxy! Understand clone-based spawning, shoot mechanics, and state variables for multiple alien invaders.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/10558189/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/10558189/',
-    thumbnail: '👾',
-    subject: 'Sprite Cloning & States',
-    difficulty: 'Intermediate',
-    xpReward: 50,
-    coinReward: 20,
-    tags: ['cloning', 'spawn', 'variables'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['5-6']
-  },
-
-  // --- GRADES 7-8 ---
-  {
-    id: 'scratch-platformer',
-    title: 'Appel Platformer',
-    description: 'A premium side-scrolling platformer with complex physics, level layouts, and custom sprite movements designed by griffpatch.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/60917032/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/60917032/',
-    thumbnail: '🏃',
-    subject: 'Physics & Animation',
-    difficulty: 'Intermediate',
-    xpReward: 60,
-    coinReward: 25,
-    tags: ['gravity', 'animation', 'scrolling'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['7-8']
-  },
-  {
-    id: 'scratch-minecraft',
-    title: 'Paper Minecraft',
-    description: 'Explore, craft, and survive in this 2D block-based sandbox. Teaches complex tile grid mapping, variables, and status engines.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/25438885/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/25438885/',
-    thumbnail: '⛏️',
-    subject: 'Tile Grid Mapping',
-    difficulty: 'Advanced',
-    xpReward: 80,
-    coinReward: 30,
-    tags: ['tilemaps', 'grid-math', 'sandbox'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['7-8']
-  },
-  {
-    id: 'scratch-td',
-    title: 'Tower Defense Tactics',
-    description: 'Place turrets to stop incoming bugs. Features list coordinate path tracking, distance calculations, and target sorting logic.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/11922709/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/11922709/',
-    thumbnail: '🏰',
-    subject: 'Target Sorting & Vectors',
-    difficulty: 'Advanced',
-    xpReward: 70,
-    coinReward: 25,
-    tags: ['lists', 'math', 'vectors'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['7-8']
-  },
-
-  // --- GRADES 9-10 ---
-  {
-    id: 'scratch-quiz',
-    title: 'Getting Over It',
-    description: 'Scratch physics remake of the famous game. Navigate tricky terrain using mouse-pointer coordinates and coordinate rotation logic.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/389464290/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/389464290/',
-    thumbnail: '🏺',
-    subject: 'Physics & Rotations',
-    difficulty: 'Advanced',
-    xpReward: 65,
-    coinReward: 25,
-    tags: ['physics', 'coordinates', 'trigonometry'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['9-10']
-  },
-  {
-    id: 'scratch-sorting',
-    title: 'Algorithms Sorting Visualizer',
-    description: 'Watch Bubble, Insertion, and Selection sort run in real-time. Visually details array exchanges and comparison counters.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/123010370/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/123010370/',
-    thumbnail: '📊',
-    subject: 'Algorithm Efficiency',
-    difficulty: 'Advanced',
-    xpReward: 60,
-    coinReward: 20,
-    tags: ['sorting', 'algorithms', 'arrays'],
-    embedWidth: 485,
-    embedHeight: 402,
-    isNew: true,
-    gradeBands: ['9-10']
-  },
-  {
-    id: 'scratch-tetris',
-    title: 'Tetris Block Puzzle',
-    description: 'Classic Tetris game in Scratch. Master tile grid rotation math, line clearing checks, and random piece spawning loops.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/26265732/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/26265732/',
-    thumbnail: '🧱',
-    subject: 'Grid Array Manipulation',
-    difficulty: 'Intermediate',
-    xpReward: 55,
-    coinReward: 20,
-    tags: ['grid', 'arrays', 'rotation'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['9-10']
-  },
-
-  // --- GRADES 11-12 ---
-  {
-    id: 'scratch-neural',
-    title: 'Neural Networks Canvas',
-    description: 'Train a simple perceptron with Scratch nodes. Adjust weights dynamically to classify inputs and watch synapses adapt.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/665181745/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/665181745/',
-    thumbnail: '🧠',
-    subject: 'Synapse Weights & AI',
-    difficulty: 'Advanced',
-    xpReward: 90,
-    coinReward: 40,
-    tags: ['machine-learning', 'weights', 'perceptron'],
-    embedWidth: 485,
-    embedHeight: 402,
-    isNew: true,
-    gradeBands: ['11-12']
-  },
-  {
-    id: 'scratch-3d-maze',
-    title: '3D Raycaster Engine',
-    description: 'Classic Wolfenstein-style 3D projection engine built natively in Scratch using custom trigonometric ray casting.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/163820257/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/163820257/',
-    thumbnail: '🧱',
-    subject: '3D Projection Math',
-    difficulty: 'Advanced',
-    xpReward: 100,
-    coinReward: 45,
-    tags: ['raycasting', '3d', 'trigonometry'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['11-12']
-  },
-  {
-    id: 'scratch-asteroids',
-    title: 'Asteroids Space Physics',
-    description: 'Maneuver through fields of drifting space rocks. Models inertia momentum vectors, projectile cloning, and angle forces.',
-    platform: 'scratch',
-    embedUrl: 'https://scratch.mit.edu/projects/17498701/embed',
-    externalUrl: 'https://scratch.mit.edu/projects/17498701/',
-    thumbnail: '🚀',
-    subject: 'Inertia & Vectors',
-    difficulty: 'Advanced',
-    xpReward: 80,
-    coinReward: 30,
-    tags: ['momentum', 'force', 'angles'],
-    embedWidth: 485,
-    embedHeight: 402,
-    gradeBands: ['11-12']
-  }
-];
-
-const BLOCKLY_GAMES: ArcadeGame[] = [
-  // --- GRADES 1-2 ---
-  {
-    id: 'blockly-puzzle',
-    title: 'Blockly Puzzle',
-    description: 'Connect pictures of animals to their matching names, leg counts, and specific traits. A fun, interactive tutorial on blockly structures and logic.',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/puzzle?lang=en',
-    externalUrl: 'https://blockly.games/puzzle',
-    thumbnail: '🧩',
-    subject: 'Block Assembly & Logic',
-    difficulty: 'Beginner',
-    xpReward: 30,
-    coinReward: 10,
-    tags: ['logic', 'matching', 'tutorial'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['1-2']
-  },
-  {
-    id: 'blockly-maze-1',
-    title: 'Blockly Maze: Intro',
-    description: 'Drag-and-drop code blocks to guide a character through sequencing mazes. Teaches basic movement and order execution (Level 1).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/maze?lang=en&level=1',
-    externalUrl: 'https://blockly.games/maze',
-    thumbnail: '🗺️',
-    subject: 'Sequencing',
-    difficulty: 'Beginner',
-    xpReward: 40,
-    coinReward: 15,
-    tags: ['sequencing', 'direction', 'movement'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['1-2']
-  },
-  {
-    id: 'blockly-maze-2',
-    title: 'Blockly Maze: Paths',
-    description: 'Guide the character around basic corner paths. Focuses on sequencing multiple turns (Level 2).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/maze?lang=en&level=2',
-    externalUrl: 'https://blockly.games/maze',
-    thumbnail: '👣',
-    subject: 'Turn Sequences',
-    difficulty: 'Beginner',
-    xpReward: 42,
-    coinReward: 15,
-    tags: ['sequencing', 'turns', 'maze'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['1-2']
-  },
-  {
-    id: 'blockly-maze-3',
-    title: 'Blockly Maze: Loops',
-    description: 'Use the repeat-until block to optimize your solution. Teaches code reduction and loop iterations (Level 3).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/maze?lang=en&level=3',
-    externalUrl: 'https://blockly.games/maze',
-    thumbnail: '🔄',
-    subject: 'Loop Iterations',
-    difficulty: 'Beginner',
-    xpReward: 45,
-    coinReward: 15,
-    tags: ['loops', 'repetition', 'blocks'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['1-2']
-  },
-
-  // --- GRADES 3-4 ---
-  {
-    id: 'blockly-maze-4',
-    title: 'Blockly Maze: Branching',
-    description: 'Use conditional turns inside a loop to navigate complex maze corridors (Level 4).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/maze?lang=en&level=4',
-    externalUrl: 'https://blockly.games/maze',
-    thumbnail: '🌿',
-    subject: 'Conditionals in Loops',
-    difficulty: 'Intermediate',
-    xpReward: 50,
-    coinReward: 20,
-    tags: ['conditionals', 'loops', 'maze'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['3-4']
-  },
-  {
-    id: 'blockly-bird-1',
-    title: 'Blockly Bird: Flight Path',
-    description: 'Guide a bird to find the worm using coordinates and simple direction angles (Level 1).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/bird?lang=en&level=1',
-    externalUrl: 'https://blockly.games/bird',
-    thumbnail: '🐦',
-    subject: 'Angles & Directions',
-    difficulty: 'Beginner',
-    xpReward: 40,
-    coinReward: 15,
-    tags: ['angles', 'direction', 'conditions'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['3-4']
-  },
-  {
-    id: 'blockly-bird-2',
-    title: 'Blockly Bird: If-Branching',
-    description: 'Change direction depending on whether the bird is carrying a worm or not. Teaches state conditionals (Level 2).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/bird?lang=en&level=2',
-    externalUrl: 'https://blockly.games/bird',
-    thumbnail: '🐛',
-    subject: 'State Conditionals',
-    difficulty: 'Beginner',
-    xpReward: 45,
-    coinReward: 15,
-    tags: ['conditionals', 'if/else', 'state'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['3-4']
-  },
-  {
-    id: 'blockly-turtle-1',
-    title: 'Blockly Turtle: Squares',
-    description: 'Draw perfect geometric shapes by repeating forward and turn movements. Teaches loop sequencing (Level 1).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/turtle?lang=en&level=1',
-    externalUrl: 'https://blockly.games/turtle',
-    thumbnail: '🐢',
-    subject: 'Geometry Loops',
-    difficulty: 'Beginner',
-    xpReward: 45,
-    coinReward: 15,
-    tags: ['loops', 'geometry', 'drawing'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['3-4']
-  },
-
-  // --- GRADES 5-6 ---
-  {
-    id: 'blockly-turtle-2',
-    title: 'Blockly Turtle: Pentagons',
-    description: 'Compute precise angles for multi-sided polygons to draw intersecting geometric shapes (Level 2).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/turtle?lang=en&level=2',
-    externalUrl: 'https://blockly.games/turtle',
-    thumbnail: '🛑',
-    subject: 'Polygon Geometry',
-    difficulty: 'Intermediate',
-    xpReward: 50,
-    coinReward: 20,
-    tags: ['loops', 'angles', 'polygons'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['5-6']
-  },
-  {
-    id: 'blockly-movie-1',
-    title: 'Blockly Movie: Animation',
-    description: 'Animate a simple geometric character by linking coordinates directly to runtime timelines (Level 1).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/movie?lang=en&level=1',
-    externalUrl: 'https://blockly.games/movie',
-    thumbnail: '🎬',
-    subject: 'Timeline Coordinates',
-    difficulty: 'Intermediate',
-    xpReward: 50,
-    coinReward: 20,
-    tags: ['animation', 'coordinates', 'time'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['5-6']
-  },
-  {
-    id: 'blockly-movie-2',
-    title: 'Blockly Movie: Velocity',
-    description: 'Make two shapes move in opposite directions at once. Introduces coordinate offsetting (Level 2).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/movie?lang=en&level=2',
-    externalUrl: 'https://blockly.games/movie',
-    thumbnail: '↔️',
-    subject: 'Coordinate Offset',
-    difficulty: 'Intermediate',
-    xpReward: 55,
-    coinReward: 20,
-    tags: ['animation', 'offsets', 'movement'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['5-6']
-  },
-  {
-    id: 'blockly-music-1',
-    title: 'Blockly Music: Composer',
-    description: 'Sequence pitch notes and timing to compose basic melodies. Teaches function procedures (Level 1).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/music?lang=en&level=1',
-    externalUrl: 'https://blockly.games/music',
-    thumbnail: '🎶',
-    subject: 'Functions & Sound',
-    difficulty: 'Intermediate',
-    xpReward: 55,
-    coinReward: 20,
-    tags: ['sound', 'sequences', 'music'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['5-6']
-  },
-
-  // --- GRADES 7-8 ---
-  {
-    id: 'blockly-music-2',
-    title: 'Blockly Music: Sound Loops',
-    description: 'Write loops to replay chord segments and drum structures efficiently (Level 2).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/music?lang=en&level=2',
-    externalUrl: 'https://blockly.games/music',
-    thumbnail: '🥁',
-    subject: 'Melody Repetition',
-    difficulty: 'Intermediate',
-    xpReward: 60,
-    coinReward: 25,
-    tags: ['loops', 'repetition', 'music'],
-    embedWidth: 1024,
-    embedHeight: 600,
-    gradeBands: ['7-8']
-  },
-  {
-    id: 'blockly-pond-tutor-1',
-    title: 'Pond Tutor: Angles & Shooting',
-    description: 'Shoot at targets by entering target heading angles. Teaches basic coordinate mapping in a visual grid (Level 1).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-tutor?lang=en&level=1',
-    externalUrl: 'https://blockly.games/pond-tutor',
-    thumbnail: '🦆',
-    subject: 'Angle Heading Math',
-    difficulty: 'Intermediate',
-    xpReward: 50,
-    coinReward: 20,
-    tags: ['angles', 'targeting', 'coordinate-grid'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['7-8']
-  },
-  {
-    id: 'blockly-pond-tutor-2',
-    title: 'Pond Tutor: Cannon Range',
-    description: 'Configure firing distance parameters to hit targets at varying coordinates (Level 2).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-tutor?lang=en&level=2',
-    externalUrl: 'https://blockly.games/pond-tutor',
-    thumbnail: '🎯',
-    subject: 'Cannon Range Math',
-    difficulty: 'Intermediate',
-    xpReward: 55,
-    coinReward: 20,
-    tags: ['cannon', 'distance', 'math'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['7-8']
-  },
-  {
-    id: 'blockly-pond-tutor-3',
-    title: 'Pond Tutor: Target Lock',
-    description: 'Combine scanner direction angle and range to successfully locate and destroy active moving targets (Level 3).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-tutor?lang=en&level=3',
-    externalUrl: 'https://blockly.games/pond-tutor',
-    thumbnail: '🔒',
-    subject: 'Target Scanner Integration',
-    difficulty: 'Intermediate',
-    xpReward: 60,
-    coinReward: 25,
-    tags: ['scanning', 'angles', 'combat'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['7-8']
-  },
-
-  // --- GRADES 9-10 ---
-  {
-    id: 'blockly-pond-tutor-4',
-    title: 'Pond Tutor: Logic Sensors',
-    description: 'Use basic loop sensors to keep track of opponent duck states and trigger defense shields (Level 4).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-tutor?lang=en&level=4',
-    externalUrl: 'https://blockly.games/pond-tutor',
-    thumbnail: '🛡️',
-    subject: 'Logic Sensors',
-    difficulty: 'Intermediate',
-    xpReward: 65,
-    coinReward: 25,
-    tags: ['sensors', 'logic', 'conditionals'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['9-10']
-  },
-  {
-    id: 'blockly-pond-tutor-5',
-    title: 'Pond Tutor: Scan Loop',
-    description: 'Write custom scanning variables to store opponent ranges and trigger automated sweeps (Level 5).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-tutor?lang=en&level=5',
-    externalUrl: 'https://blockly.games/pond-tutor',
-    thumbnail: '📡',
-    subject: 'Scan Loops',
-    difficulty: 'Advanced',
-    xpReward: 70,
-    coinReward: 25,
-    tags: ['scanning', 'loops', 'variables'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['9-10']
-  },
-  {
-    id: 'blockly-pond-tutor-6',
-    title: 'Pond Tutor: Flee Vector',
-    description: 'Compute reverse coordinate vectors to swim away from incoming fire (Level 6).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-tutor?lang=en&level=6',
-    externalUrl: 'https://blockly.games/pond-tutor',
-    thumbnail: '🏃',
-    subject: 'Flee Vectors',
-    difficulty: 'Advanced',
-    xpReward: 75,
-    coinReward: 30,
-    tags: ['math', 'vectors', 'movement'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['9-10']
-  },
-  {
-    id: 'blockly-pond-tutor-7',
-    title: 'Pond Tutor: Intercept Math',
-    description: 'Combine duck speed velocity variables to intercept moving targets proactively (Level 7).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-tutor?lang=en&level=7',
-    externalUrl: 'https://blockly.games/pond-tutor',
-    thumbnail: '🏹',
-    subject: 'Intercept Math',
-    difficulty: 'Advanced',
-    xpReward: 80,
-    coinReward: 30,
-    tags: ['intercept', 'angles', 'velocity'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['9-10']
-  },
-
-  // --- GRADES 11-12 ---
-  {
-    id: 'blockly-pond-tutor-8',
-    title: 'Pond Tutor: State Transition',
-    description: 'Transition duck logic between scanning state, shooting state, and fleeing state dynamically (Level 8).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-tutor?lang=en&level=8',
-    externalUrl: 'https://blockly.games/pond-tutor',
-    thumbnail: '🔄',
-    subject: 'AI State Transition',
-    difficulty: 'Advanced',
-    xpReward: 90,
-    coinReward: 35,
-    tags: ['states', 'ai', 'logic'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['11-12']
-  },
-  {
-    id: 'blockly-pond-tutor-9',
-    title: 'Pond Tutor: Advanced Combat',
-    description: 'Manage complex tracking arrays in JavaScript to target multiple enemies simultaneously (Level 9).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-tutor?lang=en&level=9',
-    externalUrl: 'https://blockly.games/pond-tutor',
-    thumbnail: '⚔️',
-    subject: 'Multi-Target Tracking',
-    difficulty: 'Advanced',
-    xpReward: 100,
-    coinReward: 40,
-    tags: ['arrays', 'javascript', 'combat'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['11-12']
-  },
-  {
-    id: 'blockly-pond-tutor-10',
-    title: 'Pond Tutor: Ultimate Duel',
-    description: 'Execute the ultimate battle script combining all state variables, pathing, and scanners to win (Level 10).',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-tutor?lang=en&level=10',
-    externalUrl: 'https://blockly.games/pond-tutor',
-    thumbnail: '🏆',
-    subject: 'Full Script Execution',
-    difficulty: 'Advanced',
-    xpReward: 110,
-    coinReward: 45,
-    tags: ['battle', 'strategy', 'blockly-final'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['11-12']
-  },
-  {
-    id: 'blockly-pond-duck',
-    title: 'Pond Sandbox Arena',
-    description: 'Full code sandbox. Program a battle duck in pure JavaScript to compete against advanced AI players in a free-for-all pond.',
-    platform: 'blockly',
-    embedUrl: 'https://blockly.games/pond-duck?lang=en',
-    externalUrl: 'https://blockly.games/pond-duck',
-    thumbnail: '🌊',
-    subject: 'AI Scripting Sandbox',
-    difficulty: 'Advanced',
-    xpReward: 130,
-    coinReward: 50,
-    tags: ['javascript', 'sandbox', 'ai'],
-    embedWidth: 1024,
-    embedHeight: 620,
-    gradeBands: ['11-12']
-  }
-];
-
-const ALL_GAMES = [...SCRATCH_GAMES, ...BLOCKLY_GAMES];
-
-const DIFFICULTY_COLOR: Record<string, string> = {
-  Beginner: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  Intermediate: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  Advanced: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
+const getCommandIconName = (type: BlockType): GameIconName => {
+  if (type === 'forward') return 'forward';
+  if (type === 'backward') return 'backward';
+  if (type === 'jump') return 'jump';
+  if (type === 'if_blocked') return 'condition';
+  if (type.startsWith('repeat_')) return 'repeat';
+  return 'turn';
 };
 
-const PLATFORM_GRADIENT: Record<string, string> = {
-  scratch: 'from-orange-500/20 to-amber-500/20 border-orange-500/30',
-  blockly: 'from-sky-500/20 to-indigo-500/20 border-sky-500/30',
-};
+export default function CodingArcadePage() {
+  const { profile, addXpAndCoins } = useApp();
 
-const PLATFORM_BADGE: Record<string, string> = {
-  scratch: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  blockly: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
-};
+  // Navigation states
+  const [selectedGrade, setSelectedGrade] = useState<number>(1);
+  const [activeLevel, setActiveLevel] = useState<LevelDef | null>(null);
 
+  // User progress states (saved in localStorage)
+  const [completedLevels, setCompletedLevels] = useState<number[]>([]);
+  const [levelStars, setLevelStars] = useState<Record<number, number>>({});
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
+  // Game execution/runtime states
+  const [currentX, setCurrentX] = useState<number>(2);
+  const [currentY, setCurrentY] = useState<number>(0); // 0 = ground, 1 = on crate/jumping
+  const [facing, setFacing] = useState<'right' | 'left'>('right');
+  const [characterAction, setCharacterAction] = useState<'idle' | 'walk' | 'jump' | 'fall' | 'celebrate'>('idle');
+  const [collectedBananas, setCollectedBananas] = useState<number[]>([]);
+  const [chestOpen, setChestOpen] = useState<boolean>(false);
+  const [gameMessage, setGameMessage] = useState<{ text: string; type: 'info' | 'success' | 'error' } | null>(null);
+  
+  // Interpreter control states
+  const [isRunning, setIsRunning] = useState<boolean>(false);
+  const [currentStepIdx, setCurrentStepIdx] = useState<number>(-1);
+  const [speed, setSpeed] = useState<number>(1); // 1x, 2x, 4x
 
-// ─────────────────────────────────────────────────────────────────────────────
-// COMPONENT
-// ─────────────────────────────────────────────────────────────────────────────
-export default function ArcadePage() {
-  const { addXpAndCoins, student } = useApp();
+  // Program build states
+  const [program, setProgram] = useState<CommandItem[]>([]);
+  const [activeSlot, setActiveSlot] = useState<number>(0);
 
-  const [filter, setFilter] = useState<'all' | 'scratch' | 'blockly'>('all');
-  const [difficulty, setDifficulty] = useState<'all' | 'Beginner' | 'Intermediate' | 'Advanced'>('all');
-  const [selectedGradeBand, setSelectedGradeBand] = useState<string>('9-10');
-  const [activeGame, setActiveGame] = useState<ArcadeGame | null>(null);
-  const [completed, setCompleted] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    const saved = localStorage.getItem(`cist_arcade_completed_${student?.id || 'guest'}`);
-    return saved ? (JSON.parse(saved) as string[]) : [];
-  });
-  const [claimLoading, setClaimLoading] = useState(false);
-  const [claimed, setClaimed] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    const savedClaimed = localStorage.getItem(`cist_arcade_claimed_${student?.id || 'guest'}`);
-    return savedClaimed ? (JSON.parse(savedClaimed) as string[]) : [];
-  });
-  const [iframeLoaded, setIframeLoaded] = useState(false);
+  // Dialog & Mascots states
+  const [showWinModal, setShowWinModal] = useState<boolean>(false);
+  const [earnedStars, setEarnedStars] = useState<number>(0);
+  const [rewardsClaimed, setRewardsClaimed] = useState<boolean>(false);
 
-  // Helper to parse numerical grade and get grade band
-  const getGradeBand = (gradeStr: string | undefined | null): string => {
-    if (!gradeStr) return '9-10';
-    const num = parseInt(gradeStr.replace(/\D/g, ''), 10);
-    if (isNaN(num)) return '9-10';
-    if (num >= 11) return '11-12';
-    if (num >= 9) return '9-10';
-    if (num >= 7) return '7-8';
-    if (num >= 5) return '5-6';
-    if (num >= 3) return '3-4';
-    return '1-2';
-  };
-
-  // Reload completion state when student changes (e.g. after login)
+  // Local storage loading
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const saved = localStorage.getItem(`cist_arcade_completed_${student?.id || 'guest'}`);
-    const savedClaimed = localStorage.getItem(`cist_arcade_claimed_${student?.id || 'guest'}`);
-    
-    setTimeout(() => {
-      setCompleted(saved ? (JSON.parse(saved) as string[]) : []);
-      setClaimed(savedClaimed ? (JSON.parse(savedClaimed) as string[]) : []);
-
-      if (student?.grade) {
-        setSelectedGradeBand(getGradeBand(student.grade));
-      } else {
-        setSelectedGradeBand('9-10');
-      }
-    }, 0);
-  }, [student]);
-
-  const saveCompletion = (gameId: string) => {
-    const next = completed.includes(gameId) ? completed : [...completed, gameId];
-    setCompleted(next);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(`cist_arcade_completed_${student?.id || 'guest'}`, JSON.stringify(next));
+      const savedCompleted = localStorage.getItem('cist_arcade_completed_levels');
+      const savedStars = localStorage.getItem('cist_arcade_level_stars');
+      const savedSound = localStorage.getItem('cist_arcade_sound');
+      if (savedCompleted) setCompletedLevels(JSON.parse(savedCompleted));
+      if (savedStars) setLevelStars(JSON.parse(savedStars));
+      if (savedSound) setSoundEnabled(savedSound === 'true');
     }
+  }, []);
+
+  // Update sound state to localstorage
+  const toggleSound = () => {
+    const nextVal = !soundEnabled;
+    setSoundEnabled(nextVal);
+    localStorage.setItem('cist_arcade_sound', String(nextVal));
   };
 
-  const handleOpenGame = (game: ArcadeGame) => {
-    setActiveGame(game);
-    setIframeLoaded(false);
-    // Mark as "played" (opened) — not claimed yet
-    saveCompletion(game.id);
-  };
-
-  const handleClaimXP = async (game: ArcadeGame) => {
-    if (claimed.includes(game.id)) return;
-    setClaimLoading(true);
-    try {
-      await addXpAndCoins(game.xpReward, game.coinReward, `Arcade: ${game.title}`);
-      const next = [...claimed, game.id];
-      setClaimed(next);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(`cist_arcade_claimed_${student?.id || 'guest'}`, JSON.stringify(next));
+  // Helper: auto-detect user's school grade on profile load
+  useEffect(() => {
+    if (profile?.grade) {
+      const match = profile.grade.match(/\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num >= 1 && num <= 12) {
+          setSelectedGrade(num);
+        }
       }
-    } finally {
-      setClaimLoading(false);
+    }
+  }, [profile]);
+
+  // Load level definitions
+  const gradeLevels = getLevelsForGrade(selectedGrade);
+
+  // Load selected level into sandbox
+  const selectLevel = (level: LevelDef) => {
+    const firstLevelInStage = (level.grade - 1) * 10 + 1;
+    const unlocked = level.id === firstLevelInStage || completedLevels.includes(level.id - 1);
+    if (!unlocked) return;
+
+    setActiveLevel(level);
+    resetSandbox(level);
+    setProgram([]);
+    setActiveSlot(0);
+    setShowWinModal(false);
+    setRewardsClaimed(false);
+  };
+
+  // Reset sandbox coordinates and visual objects
+  const resetSandbox = (level: LevelDef | null = activeLevel) => {
+    if (!level) return;
+    setCurrentX(level.startPos);
+    setCurrentY(0);
+    setFacing(level.chestPos >= level.startPos ? 'right' : 'left');
+    setCharacterAction('idle');
+    setCollectedBananas([]);
+    setChestOpen(false);
+    setIsRunning(false);
+    setCurrentStepIdx(-1);
+    setGameMessage({ text: level.instructions, type: 'info' });
+  };
+
+  // Sound play wrappers with check
+  const triggerJumpSound = () => soundEnabled && playJumpSound();
+  const triggerCollectSound = () => soundEnabled && playCollectSound();
+  const triggerChestSound = () => soundEnabled && playChestSound();
+  const triggerSuccessSound = () => soundEnabled && playSuccessSound();
+  const triggerFailSound = () => soundEnabled && playFailSound();
+
+  // Add command to workspace program list
+  const addCommand = (type: BlockType) => {
+    if (!activeLevel) return;
+    if (program.length >= activeLevel.maxSlots) {
+      setGameMessage({ text: `Maximum of ${activeLevel.maxSlots} command slots reached!`, type: 'error' });
+      return;
+    }
+
+    let newItem: CommandItem = {
+      id: Math.random().toString(36).substring(2, 9),
+      type
+    };
+
+    // If it's a repeat loop block, seed defaults
+    if (type.startsWith('repeat_')) {
+      const count = parseInt(type.split('_')[1], 10);
+      newItem = {
+        ...newItem,
+        type,
+        loopAction: 'forward',
+        loopCount: count
+      };
+    }
+
+    setProgram([...program, newItem]);
+    setActiveSlot(program.length + 1);
+  };
+
+  // Remove command from program list
+  const removeCommand = (idx: number) => {
+    const updated = [...program];
+    updated.splice(idx, 1);
+    setProgram(updated);
+    setActiveSlot(Math.max(0, updated.length));
+  };
+
+  // Clear entire program
+  const clearProgram = () => {
+    setProgram([]);
+    setActiveSlot(0);
+    resetSandbox();
+  };
+
+  // Configure repeat loop parameters inline
+  const updateRepeatConfig = (idx: number, updates: Partial<CommandItem>) => {
+    const updated = [...program];
+    updated[idx] = { ...updated[idx], ...updates };
+    setProgram(updated);
+  };
+
+  // =========================================================================
+  // GAME RUNTIME INTERPRETER
+  // =========================================================================
+  const runProgram = async () => {
+    if (!activeLevel || program.length === 0 || isRunning) return;
+    setIsRunning(true);
+    resetSandbox();
+
+    // Expand loop structures and conditions into flat linear execution sequence
+    const executionQueue: { type: BlockType; originIdx: number; loopAction?: string }[] = [];
+
+    program.forEach((item, idx) => {
+      if (item.type.startsWith('repeat_') && item.loopAction && item.loopCount) {
+        for (let loopIdx = 0; loopIdx < item.loopCount; loopIdx++) {
+          executionQueue.push({
+            type: item.loopAction as any,
+            originIdx: idx,
+            loopAction: `Loop ${loopIdx + 1}/${item.loopCount}`
+          });
+        }
+      } else {
+        executionQueue.push({
+          type: item.type,
+          originIdx: idx
+        });
+      }
+    });
+
+    // Step-by-step runner
+    let step = 0;
+    let x = activeLevel.startPos;
+    let y = 0;
+    let face: 'right' | 'left' = activeLevel.chestPos >= activeLevel.startPos ? 'right' : 'left';
+    let bananas = [...collectedBananas];
+
+    const intervalTime = 800 / speed;
+
+    const executeNextStep = () => {
+      if (step >= executionQueue.length) {
+        // Program finished executing. Check final state
+        setIsRunning(false);
+        setCurrentStepIdx(-1);
+
+        if (x === activeLevel.chestPos) {
+          if (bananas.length === activeLevel.bananaPos.length) {
+            handleVictory(executionQueue.length);
+          } else {
+            triggerFailSound();
+            setGameMessage({ text: "You reached the chest, but missed some bananas! Collect all of them.", type: 'error' });
+          }
+        } else {
+          triggerFailSound();
+          setGameMessage({ text: "The program ended, but the monkey did not reach the treasure! Try again.", type: 'error' });
+        }
+        return;
+      }
+
+      const activeInstruction = executionQueue[step];
+      setCurrentStepIdx(activeInstruction.originIdx);
+
+      // Perform state logic based on instruction
+      let blockToCheck = activeInstruction.type;
+
+      // Handle conditional logic expansion
+      if (blockToCheck === 'if_blocked') {
+        const nextX = face === 'right' ? x + 1 : x - 1;
+        const obstacleInFront = activeLevel.obstacles.find(obs => obs.x === nextX);
+        blockToCheck = obstacleInFront ? 'jump' : 'forward';
+      }
+
+      if (blockToCheck === 'forward') {
+        setCharacterAction('walk');
+        x = face === 'right' ? x + 1 : x - 1;
+        setCurrentX(x);
+        // If stepping off crate
+        const currentObstacle = activeLevel.obstacles.find(obs => obs.x === x);
+        if (!currentObstacle || currentObstacle.type !== 'crate') {
+          setCurrentY(0);
+          y = 0;
+        }
+      } else if (blockToCheck === 'backward') {
+        setCharacterAction('walk');
+        x = face === 'right' ? x - 1 : x + 1;
+        setCurrentX(x);
+        const currentObstacle = activeLevel.obstacles.find(obs => obs.x === x);
+        if (!currentObstacle || currentObstacle.type !== 'crate') {
+          setCurrentY(0);
+          y = 0;
+        }
+      } else if (blockToCheck === 'turn_left') {
+        face = 'left';
+        setFacing('left');
+      } else if (blockToCheck === 'turn_right') {
+        face = 'right';
+        setFacing('right');
+      } else if (blockToCheck === 'jump') {
+        setCharacterAction('jump');
+        triggerJumpSound();
+        const startX = x;
+        const landingX = face === 'right' ? startX + 2 : startX - 2;
+
+        // Animate Jump arc
+        setCurrentY(1.5); // High point of jump
+        
+        setTimeout(() => {
+          x = landingX;
+          setCurrentX(x);
+
+          // Check landing tile type
+          const landObstacle = activeLevel.obstacles.find(obs => obs.x === x);
+          if (landObstacle && ['crate', 'breakable', 'falling'].includes(landObstacle.type)) {
+            setCurrentY(1); // land on crate
+            y = 1;
+          } else {
+            setCurrentY(0); // land on ground
+            y = 0;
+          }
+          setCharacterAction('idle');
+        }, intervalTime / 2);
+      }
+
+      // Check collision/hazards after landing/stepping (wait briefly for animation alignment)
+      setTimeout(() => {
+        // 1. Check if the monkey hit a crate wall (walking directly into it)
+        const hitCrate = activeLevel.obstacles.find(obs => obs.x === x && ['crate', 'breakable', 'falling'].includes(obs.type) && y === 0);
+        if (hitCrate) {
+          triggerFailSound();
+          setIsRunning(false);
+          setCurrentStepIdx(-1);
+          setGameMessage({ text: "Ouch! You walked right into a crate. Try jumping over it!", type: 'error' });
+          return;
+        }
+
+        // 2. Check if the monkey fell in a hole or water
+        const fellInHole = activeLevel.obstacles.find(obs => obs.x === x && ['hole', 'water', 'spikes', 'enemy'].includes(obs.type) && y === 0);
+        if (fellInHole) {
+          triggerFailSound();
+          setIsRunning(false);
+          setCurrentStepIdx(-1);
+          setCurrentY(-1); // fall visual
+          setCharacterAction('fall');
+          const hazardMessage = fellInHole.type === 'hole'
+            ? "Oops! The monkey fell down a deep hole!"
+            : fellInHole.type === 'water'
+              ? "Splash! The monkey fell into the water!"
+              : fellInHole.type === 'spikes'
+                ? "Careful! Jump over the spikes!"
+                : "A jungle critter blocked the path. Jump over it!";
+          setGameMessage({ text: hazardMessage, type: 'error' });
+          return;
+        }
+
+        // 3. Collect banana if aligned
+        const onBananaIdx = activeLevel.bananaPos.indexOf(x);
+        if (onBananaIdx !== -1 && !bananas.includes(x)) {
+          triggerCollectSound();
+          bananas.push(x);
+          setCollectedBananas([...bananas]);
+        }
+
+        // Move to next step
+        step++;
+        if (blockToCheck !== 'jump') setCharacterAction('idle');
+        executeNextStep();
+      }, intervalTime / 2 + 10);
+    };
+
+    // Begin execution loop
+    executeNextStep();
+  };
+
+  // Victory handlers
+  const handleVictory = (commandsCount: number) => {
+    if (!activeLevel) return;
+    triggerChestSound();
+    setChestOpen(true);
+    setCharacterAction('celebrate');
+
+    // Calculate stars
+    let stars = 1;
+    if (commandsCount <= activeLevel.starThresholds[0]) {
+      stars = 3;
+    } else if (commandsCount <= activeLevel.starThresholds[1]) {
+      stars = 2;
+    }
+    setEarnedStars(stars);
+
+    // Trigger success music and modal
+    setTimeout(() => {
+      triggerSuccessSound();
+      setShowWinModal(true);
+      
+      // Save progress to localstorage
+      const nextCompleted = Array.from(new Set([...completedLevels, activeLevel.id]));
+      const nextStars = { ...levelStars, [activeLevel.id]: Math.max(levelStars[activeLevel.id] || 0, stars) };
+      setCompletedLevels(nextCompleted);
+      setLevelStars(nextStars);
+      localStorage.setItem('cist_arcade_completed_levels', JSON.stringify(nextCompleted));
+      localStorage.setItem('cist_arcade_level_stars', JSON.stringify(nextStars));
+      
+      // Play Canvas Confetti celebration dynamically
+      import('canvas-confetti').then((m) => {
+        m.default({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      }).catch(err => console.error("Confetti loader error", err));
+    }, 400);
+  };
+
+  // Database rewards award claimer
+  const claimRewards = async () => {
+    if (rewardsClaimed || !activeLevel) return;
+    setRewardsClaimed(true);
+
+    const xpReward = activeLevel.grade * 15; // Grade-scaling XP
+    const coinReward = activeLevel.grade * 5; // Grade-scaling Coins
+    
+    try {
+      await addXpAndCoins(xpReward, coinReward, `Completed Arcade Level ${activeLevel.grade}-${activeLevel.id - (activeLevel.grade - 1) * 10}`);
+    } catch (e) {
+      console.error("Error updating player rewards:", e);
     }
   };
 
-  const handleIframeLoad = () => {
-    setIframeLoaded(true);
-    // If the iframe never fires onLoad, it might be blocked
-  };
+  // Move to next level
+  const loadNextLevel = () => {
+    if (!activeLevel) return;
+    const nextId = activeLevel.id + 1;
+    const allLevels = getLevelsForGrade(selectedGrade);
+    const nextInGrade = allLevels.find(l => l.id === nextId);
 
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    const container = e.currentTarget;
-    if (e.deltaY !== 0) {
-      container.scrollLeft += e.deltaY;
-      // Do not call e.preventDefault() here if we want to allow default window scrolling when they finish scrolling,
-      // but to strictly scroll the container when over it:
-      e.preventDefault();
+    if (nextInGrade) {
+      selectLevel(nextInGrade);
+    } else if (selectedGrade < 12) {
+      // Transition to next grade
+      const nextGrade = selectedGrade + 1;
+      setSelectedGrade(nextGrade);
+      const nextGradeLevels = getLevelsForGrade(nextGrade);
+      selectLevel(nextGradeLevels[0]);
+    } else {
+      // Finished all 120 levels!
+      setGameMessage({ text: "Congratulations! You have completed all 120 Arcade levels!", type: 'success' });
+      setActiveLevel(null);
     }
   };
 
-  const filtered = ALL_GAMES.filter((g) => {
-    const platformMatch = filter === 'all' || g.platform === filter;
-    const diffMatch = difficulty === 'all' || g.difficulty === difficulty;
-    const gradeMatch = selectedGradeBand === 'all' || g.gradeBands.includes(selectedGradeBand);
-    return platformMatch && diffMatch && gradeMatch;
-  });
+  // Grade progress helper
+  const getGradeProgress = (gradeNum: number) => {
+    const startId = (gradeNum - 1) * 10 + 1;
+    const endId = startId + 9;
+    const solved = completedLevels.filter(id => id >= startId && id <= endId).length;
+    return solved;
+  };
 
-  const gradeBandGames = ALL_GAMES.filter(g => selectedGradeBand === 'all' || g.gradeBands.includes(selectedGradeBand));
-  const totalXpAvailable = gradeBandGames.reduce((sum, g) => sum + g.xpReward, 0);
-  const totalXpEarned = gradeBandGames.filter((g) => claimed.includes(g.id)).reduce((sum, g) => sum + g.xpReward, 0);
+  // Level status checkers
+  const isLevelUnlocked = (lvl: LevelDef) => {
+    if (lvl.id === 1) return true;
+    const startOfGradeId = (lvl.grade - 1) * 10 + 1;
+    if (lvl.id === startOfGradeId) return true; // First level of any grade is always unlocked
+    return completedLevels.includes(lvl.id - 1);
+  };
+
+  const totalStarsEarned = Object.values(levelStars).reduce((sum, val) => sum + val, 0);
+
+  // Parallax theme-styled background definitions
+  const getThemeStyle = (gradeNum: number) => {
+    if (gradeNum <= 3) {
+      return {
+        bg: 'from-sky-200 via-sky-300 to-emerald-300',
+        floor: 'bg-gradient-to-b from-lime-500 to-emerald-800 border-t-4 border-lime-300',
+        obstacleBg: 'bg-amber-800',
+        cloudColor: 'bg-white/60',
+        groundIcon: 'jungle-tree' as GameIconName,
+        type: 'Grassland Kingdom'
+      };
+    } else if (gradeNum <= 6) {
+      return {
+        bg: 'from-amber-950 via-orange-900 to-amber-900',
+        floor: 'bg-amber-800 border-t-4 border-amber-600',
+        obstacleBg: 'bg-yellow-700',
+        cloudColor: 'bg-amber-400/10',
+        groundIcon: 'rock' as GameIconName,
+        type: 'Sahara Dune'
+      };
+    } else if (gradeNum <= 9) {
+      return {
+        bg: 'from-cyan-950 via-sky-900 to-slate-900',
+        floor: 'bg-cyan-800 border-t-4 border-cyan-400',
+        obstacleBg: 'bg-sky-700',
+        cloudColor: 'bg-cyan-200/10',
+        groundIcon: 'sparkle' as GameIconName,
+        type: 'Crystal Glacier'
+      };
+    } else {
+      return {
+        bg: 'from-indigo-950 via-purple-950 to-slate-950',
+        floor: 'bg-purple-950 border-t-4 border-violet-500',
+        obstacleBg: 'bg-violet-900',
+        cloudColor: 'bg-violet-400/10',
+        groundIcon: 'crown' as GameIconName,
+        type: 'Castle Realm'
+      };
+    }
+  };
+
+  const activeTheme = getThemeStyle(selectedGrade);
 
   return (
-    <div className="-m-4 md:-m-6 lg:-m-8 min-h-screen bg-navy-dark text-white pb-12">
-      {/* ── Hero Banner ── */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-navy-deep via-navy-dark to-[#0d1b35] border-b border-navy-light/20">
-        <div className="absolute inset-0 opacity-10 pointer-events-none">
-          <div className="absolute top-6 left-12 text-7xl blur-sm select-none">🎮</div>
-          <div className="absolute bottom-4 right-20 text-6xl blur-sm select-none">⭐</div>
-          <div className="absolute top-3 right-40 text-5xl blur-sm select-none">🚀</div>
-        </div>
-        <div className="relative z-10 px-6 py-8 max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Gamepad2 className="h-6 w-6 text-gold-accent" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gold-accent">
-                  CIST CodeQuest
-                </span>
-              </div>
-              <h1 className="text-3xl font-black tracking-tight text-white leading-none">
-                Game <span className="text-gold-accent">Arcade</span>
-              </h1>
-              {student && (
-                <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-gold-accent/20 border border-gold-accent/30 rounded-full text-[11px] font-bold text-gold-accent">
-                  🎓 Recommended for Grades {selectedGradeBand}
-                </div>
-              )}
-              <p className="mt-2 text-sm text-gray-400 max-w-xl">
-                Play interactive coding games from <strong className="text-orange-400">Scratch</strong> and{' '}
-                <strong className="text-sky-400">Blockly</strong>. Explore, experiment, and earn XP when you&apos;re done.
-              </p>
-            </div>
-
-            {/* XP Progress */}
-            <div className="shrink-0 bg-navy-deep/60 border border-navy-light/20 rounded-2xl px-5 py-4 min-w-48">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Arcade XP</span>
-                <Sparkles className="h-4 w-4 text-gold-accent" />
-              </div>
-              <div className="flex items-end gap-1">
-                <span className="text-2xl font-black text-gold-accent">{totalXpEarned}</span>
-                <span className="text-sm text-gray-500 mb-0.5">/ {totalXpAvailable} XP</span>
-              </div>
-              <div className="mt-2 h-1.5 rounded-full bg-navy-medium overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-gold-accent to-amber-400 rounded-full transition-all duration-700"
-                  style={{ width: `${totalXpAvailable ? (totalXpEarned / totalXpAvailable) * 100 : 0}%` }}
-                />
-              </div>
-              <p className="mt-1.5 text-[10px] text-gray-500">
-                {claimed.length} / {ALL_GAMES.length} games completed
-              </p>
-            </div>
+    <div className="-m-4 md:-m-6 lg:-m-8 flex flex-col bg-navy-dark min-h-[calc(100vh-4rem)] text-slate-100 overflow-x-hidden">
+      
+      {/* HEADER BANNER */}
+      <div className="bg-gradient-to-r from-navy-deep to-navy-dark px-6 py-5 border-b border-navy-light/15 flex flex-col md:flex-row items-center justify-between shadow-lg">
+        <div className="flex items-center space-x-3.5">
+          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-gold-accent to-amber-500 text-navy-dark shadow-lg shadow-gold-accent/15">
+            <Gamepad2 className="h-7 w-7 animate-pulse" />
           </div>
-        </div>
-      </div>
-
-      {/* CIST Pond Multiplayer Arena Banner */}
-      <div className="max-w-6xl mx-auto px-6 mt-6 mb-8">
-        <div className="bg-gradient-to-r from-navy-deep via-[#111f3d] to-navy-medium border border-navy-light/20 rounded-2xl p-5 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg hover:shadow-navy-light/10 transition duration-300">
-          <div className="flex items-center space-x-4">
-            <span className="text-3xl animate-bounce">🌊</span>
-            <div>
-              <h3 className="text-sm font-black uppercase text-gold-accent tracking-wider flex items-center space-x-1.5">
-                <span>Pond JS Multiplayer Arena</span>
-                <span className="bg-maple-red text-white text-[8px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded leading-none animate-pulse">
-                  Live
-                </span>
-              </h3>
-              <p className="text-xs text-gray-400 font-medium mt-1 leading-relaxed max-w-xl">
-                Deploy your custom JavaScript state machines, calculate fleeing vectors, and fight matching opponent scripts on a real-time canvas battleground. Earn +30 XP for a victory!
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/arcade/multiplayer"
-            className="flex items-center space-x-1 px-5 py-2.5 bg-navy-medium hover:bg-navy-light border border-navy-light/35 rounded-xl text-xs font-black text-white hover:text-gold-accent shadow transition duration-200 shrink-0 cursor-pointer"
-          >
-            <span>Fight Code Duels</span>
-            <span>⚔️</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* ── Filters ── */}
-      <div className="bg-navy-deep border-b border-navy-light/15 px-6 py-3">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          
-          {/* Grade Band Filter (Left) */}
-          {student ? (
-            <div className="flex items-center gap-1.5 py-0.5">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gold-accent mr-1.5 shrink-0">Grade Level:</span>
-              <span className="bg-gold-accent/20 text-gold-accent border border-gold-accent/30 px-3 py-1.5 rounded-xl text-xs font-black">
-                Grade {selectedGradeBand} (Your Class)
+          <div>
+            <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-slate-100 flex items-center gap-2">
+              Coding Arcade
+              <span className="text-xs bg-gold-accent/10 border border-gold-accent/30 text-gold-accent px-2 py-0.5 rounded-full uppercase font-black">
+                120 Levels
               </span>
-            </div>
-          ) : (
-            <div 
-              onWheel={handleWheel}
-              className="flex items-center gap-1.5 overflow-x-auto py-1 max-w-full no-scrollbar"
-              style={{ WebkitOverflowScrolling: 'touch' }}
-            >
-              <span className="text-[10px] font-black uppercase tracking-widest text-gold-accent mr-1.5 shrink-0">Grade Level:</span>
-              {(['1-2', '3-4', '5-6', '7-8', '9-10', '11-12'] as const).map((band) => (
-                <button
-                  key={band}
-                  onClick={() => setSelectedGradeBand(band)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all shrink-0 ${
-                    selectedGradeBand === band
-                      ? 'bg-gold-accent text-navy-dark shadow scale-105 border border-gold-accent/50'
-                      : 'bg-navy-medium/30 text-gray-400 border border-navy-light/10 hover:text-white hover:bg-navy-medium/55'
-                  }`}
-                >
-                  Grade {band}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Platform and Difficulty filters (Right) */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Platform filter */}
-            <div className="flex items-center gap-1.5 bg-navy-medium/50 rounded-xl p-1 border border-navy-light/15">
-              {(['all', 'scratch', 'blockly'] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setFilter(p)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                    filter === p
-                      ? p === 'scratch'
-                        ? 'bg-orange-500 text-white shadow'
-                        : 'bg-sky-500 text-white shadow'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {p === 'scratch' ? '🟠 Scratch' : p === 'blockly' ? '🔷 Blockly' : 'All'}
-                </button>
-              ))}
-            </div>
-
-            {/* Difficulty filter */}
-            <div className="flex items-center gap-1.5 bg-navy-medium/50 rounded-xl p-1 border border-navy-light/15">
-              {(['all', 'Beginner', 'Intermediate', 'Advanced'] as const).map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setDifficulty(d)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                    difficulty === d
-                      ? 'bg-white/15 text-white shadow'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-
-            <span className="text-xs text-gray-500 font-semibold shrink-0">
-              {filtered.length} game{filtered.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Game Grid ── */}
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        {/* Scratch Section */}
-        {(filter === 'all' || filter === 'scratch') && (
-          <section className="mb-10">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="h-8 w-8 rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-lg">
-                🟠
-              </div>
-              <div>
-                <h2 className="text-base font-black uppercase tracking-wider text-white">Scratch Projects</h2>
-                <p className="text-[11px] text-gray-400">scratch.mit.edu — Visual block coding for ages 8+</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered
-                .filter((g) => g.platform === 'scratch')
-                .map((game) => (
-                  <GameCard
-                    key={game.id}
-                    game={game}
-                    isCompleted={completed.includes(game.id)}
-                    isClaimed={claimed.includes(game.id)}
-                    onPlay={() => handleOpenGame(game)}
-                    onClaim={() => handleClaimXP(game)}
-                    claimLoading={claimLoading}
-                  />
-                ))}
-            </div>
-          </section>
-        )}
-
-        {/* Blockly Section */}
-        {(filter === 'all' || filter === 'blockly') && (
-          <section>
-            <div className="flex items-center gap-3 mb-5">
-              <div className="h-8 w-8 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-lg">
-                🔷
-              </div>
-              <div>
-                <h2 className="text-base font-black uppercase tracking-wider text-white">Blockly Games</h2>
-                <p className="text-[11px] text-gray-400">blockly.games — Google&apos;s visual programming puzzles</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered
-                .filter((g) => g.platform === 'blockly')
-                .map((game) => (
-                  <GameCard
-                    key={game.id}
-                    game={game}
-                    isCompleted={completed.includes(game.id)}
-                    isClaimed={claimed.includes(game.id)}
-                    onPlay={() => handleOpenGame(game)}
-                    onClaim={() => handleClaimXP(game)}
-                    claimLoading={claimLoading}
-                  />
-                ))}
-            </div>
-          </section>
-        )}
-
-
-        {filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center bg-navy-deep/40 rounded-3xl border border-navy-light/10 p-8 max-w-xl mx-auto mt-6">
-            <span className="text-4xl mb-4">👾</span>
-            <h3 className="text-lg font-black text-white mb-2">No games found</h3>
-            <p className="text-sm text-gray-400">
-              No games match the current filters. Try selecting a different difficulty, platform, or grade level!
+            </h1>
+            <p className="text-xs text-slate-400 font-semibold mt-0.5">
+              Algorithm puzzle challenges inspired by CodeMonkey. Pass levels to claim XP & Coins!
             </p>
           </div>
-        )}
-      </div>
-
-      {/* ── Game Modal ── */}
-      {activeGame && (
-        <GameModal
-          game={activeGame}
-          isClaimed={claimed.includes(activeGame.id)}
-          claimLoading={claimLoading}
-          iframeLoaded={iframeLoaded}
-          onLoad={handleIframeLoad}
-          onClaim={() => handleClaimXP(activeGame)}
-          onClose={() => {
-            setActiveGame(null);
-            setIframeLoaded(false);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GAME CARD
-// ─────────────────────────────────────────────────────────────────────────────
-function GameCard({
-  game,
-  isCompleted,
-  isClaimed,
-  onPlay,
-  onClaim,
-  claimLoading,
-}: {
-  game: ArcadeGame;
-  isCompleted: boolean;
-  isClaimed: boolean;
-  onPlay: () => void;
-  onClaim: () => void;
-  claimLoading: boolean;
-}) {
-  return (
-    <div
-      className={`relative flex flex-col rounded-2xl border bg-gradient-to-br ${
-        PLATFORM_GRADIENT[game.platform]
-      } overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-black/40`}
-    >
-      {/* New badge */}
-      {game.isNew && (
-        <div className="absolute top-3 right-3 z-10 bg-maple-red text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shadow">
-          NEW
-        </div>
-      )}
-
-      {/* Claimed badge */}
-      {isClaimed && (
-        <div className="absolute top-3 left-3 z-10 flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-          <CheckCircle2 className="h-3 w-3" />
-          XP Claimed
-        </div>
-      )}
-
-      {/* Thumbnail area */}
-      <div className="flex items-center justify-center h-28 bg-navy-dark/50 border-b border-navy-light/10 text-6xl select-none">
-        {game.thumbnail}
-      </div>
-
-      {/* Content */}
-      <div className="flex flex-col flex-1 p-4 gap-3">
-        {/* Platform + Difficulty badges */}
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${PLATFORM_BADGE[game.platform]}`}
-          >
-            {game.platform === 'scratch' ? '🟠 Scratch' : game.platform === 'blockly' ? '🔷 Blockly' : '⚡ Hour of Code'}
-          </span>
-          <span
-            className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${DIFFICULTY_COLOR[game.difficulty]}`}
-          >
-            {game.difficulty}
-          </span>
         </div>
 
-        <h3 className="text-sm font-black text-white leading-tight">{game.title}</h3>
-        <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-3">{game.description}</p>
-
-        {/* Subject pill */}
-        <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
-          <BookOpen className="h-3 w-3" />
-          <span className="font-semibold">{game.subject}</span>
-        </div>
-
-        {/* Tags */}
-        <div className="flex flex-wrap gap-1">
-          {game.tags.map((t) => (
-            <span
-              key={t}
-              className="text-[9px] px-1.5 py-0.5 rounded bg-navy-medium/60 text-gray-400 font-semibold border border-navy-light/10"
-            >
-              {t}
+        {/* Global Progress Metrics */}
+        <div className="mt-4 md:mt-0 flex items-center gap-6">
+          <div className="bg-navy-medium/40 border border-navy-light/15 rounded-xl px-4 py-2 text-center">
+            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-500">Stars Collected</span>
+            <span className="text-xl font-extrabold text-gold-accent flex items-center justify-center gap-1">
+              <Star className="h-5 w-5 fill-gold-accent text-gold-accent" />
+              {totalStarsEarned} <span className="text-xs text-slate-500">/ 360</span>
             </span>
-          ))}
-        </div>
-
-        {/* Rewards row */}
-        <div className="flex items-center gap-3 mt-auto pt-2 border-t border-navy-light/10">
-          <div className="flex items-center gap-1 text-gold-accent text-xs font-bold">
-            <Zap className="h-3.5 w-3.5" />
-            +{game.xpReward} XP
           </div>
-          <div className="flex items-center gap-1 text-amber-400 text-xs font-bold">
-            <Coins className="h-3.5 w-3.5" />
-            +{game.coinReward}
-          </div>
-        </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2">
+          <div className="bg-navy-medium/40 border border-navy-light/15 rounded-xl px-4 py-2 text-center">
+            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-500">Total Completion</span>
+            <span className="text-xl font-extrabold text-indigo-400">
+              {completedLevels.length} <span className="text-xs text-slate-500">/ 120</span>
+            </span>
+          </div>
+
+          {/* Sound toggle button */}
           <button
-            onClick={onPlay}
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-maple-red hover:bg-maple-light text-white text-xs font-bold uppercase tracking-wider py-2.5 transition-all shadow-md shadow-maple-red/20 active:scale-95"
+            onClick={toggleSound}
+            className="p-2.5 rounded-xl bg-navy-medium/60 border border-navy-light/20 hover:bg-navy-medium hover:text-white transition-all"
+            title="Toggle Sound Effects"
           >
-            <Play className="h-3.5 w-3.5" />
-            Play Now
+            {soundEnabled ? <Volume2 className="h-5 w-5 text-indigo-400" /> : <VolumeX className="h-5 w-5 text-slate-500" />}
           </button>
-
-          {isCompleted && !isClaimed && (
-            <button
-              onClick={onClaim}
-              disabled={claimLoading}
-              className="flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-2.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
-            >
-              <Trophy className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Claim</span>
-            </button>
-          )}
-
-          {isClaimed && (
-            <div className="flex items-center gap-1 rounded-xl bg-emerald-600/20 text-emerald-400 text-xs font-bold px-3 py-2.5 border border-emerald-500/30">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-            </div>
-          )}
         </div>
       </div>
-    </div>
-  );
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GAME MODAL
-// ─────────────────────────────────────────────────────────────────────────────
-function GameModal({
-  game,
-  isClaimed,
-  claimLoading,
-  iframeLoaded,
-  onLoad,
-  onClaim,
-  onClose,
-}: {
-  game: ArcadeGame;
-  isClaimed: boolean;
-  claimLoading: boolean;
-  iframeLoaded: boolean;
-  onLoad: () => void;
-  onClaim: () => void;
-  onClose: () => void;
-}) {
-  const [showFallback, setShowFallback] = useState(false);
+      {/* DASHBOARD OR LEVEL WORKSPACE */}
+      {!activeLevel ? (
+        <div className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-8">
+          
+          {/* GRADE TABS GRID */}
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2 border-b border-navy-light/10 pb-2">
+              <BookOpen className="h-5 w-5 text-indigo-400" />
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-300">Select Grade Cohort</h2>
+            </div>
 
-  // After 4 seconds without the iframe loading, show the fallback
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (!iframeLoaded) setShowFallback(true);
-    }, 4000);
-    return () => clearTimeout(t);
-  }, [iframeLoaded]);
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
+              {GRADE_NAMES.map((name, idx) => {
+                const gradeNum = idx + 1;
+                const learningStage = LEARNING_STAGES.find((stage) => stage.grade === gradeNum);
+                const displayName = gradeNum === 1 ? 'Monkey Sequencing' : learningStage?.title || name;
+                const solved = getGradeProgress(gradeNum);
+                const percent = Math.round((solved / 10) * 100);
+                const isSelected = selectedGrade === gradeNum;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-      <div className="relative w-full max-w-7xl bg-navy-deep rounded-2xl border border-navy-light/25 shadow-2xl shadow-black/60 flex flex-col max-h-[95vh] overflow-hidden">
+                return (
+                  <button
+                    key={gradeNum}
+                    onClick={() => setSelectedGrade(gradeNum)}
+                    className={`text-left rounded-2xl p-4.5 border transition-all duration-200 cursor-pointer relative group overflow-hidden ${
+                      isSelected
+                        ? 'bg-navy-deep border-indigo-500 shadow-lg shadow-indigo-500/10'
+                        : 'bg-navy-deep/40 border-navy-light/15 hover:border-slate-500'
+                    }`}
+                  >
+                    {/* Glowing highlight */}
+                    {isSelected && (
+                      <div className="absolute right-0 top-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl"></div>
+                    )}
+                    
+                    <span className="block text-[10px] font-black uppercase tracking-wider text-slate-500">Stage {gradeNum} • {gradeNum === 1 ? 'Block Coding' : learningStage?.subject}</span>
+                    <span className="block text-sm font-extrabold text-slate-200 mt-1 truncate group-hover:text-white">{displayName}</span>
+                    
+                    {/* Progress Slider */}
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between text-[9px] font-bold text-slate-400 pb-1">
+                        <span>{solved}/10 Cleared</span>
+                        <span>{percent}%</span>
+                      </div>
+                      <div className="w-full bg-navy-dark h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-indigo-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${percent}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-navy-light/20 bg-navy-dark/50 shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{game.thumbnail}</span>
-            <div>
-              <h2 className="text-sm font-black text-white leading-tight">{game.title}</h2>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${PLATFORM_BADGE[game.platform]}`}>
-                  {game.platform === 'scratch' ? '🟠 Scratch' : '🔷 Blockly'}
+          {/* ADVENTURE MAP TRAIL FOR SELECTED GRADE */}
+          <div className="rounded-3xl bg-navy-deep border border-navy-light/10 p-6 md:p-8 shadow-2xl relative overflow-hidden">
+            {/* Background elements */}
+            <div className={`absolute inset-0 bg-gradient-to-b opacity-5 pointer-events-none ${activeTheme.bg}`}></div>
+            
+            <div className="relative flex flex-col md:flex-row md:items-center justify-between border-b border-navy-light/10 pb-5 mb-8">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Current Map Path</span>
+                <h3 className="text-lg md:text-xl font-extrabold text-slate-100 uppercase mt-0.5">
+                  Stage {selectedGrade}: {selectedGrade === 1 ? 'Monkey Sequencing' : LEARNING_STAGES.find((stage) => stage.grade === selectedGrade)?.title}
+                </h3>
+              </div>
+              <div className="mt-2 md:mt-0 bg-navy-medium/40 border border-navy-light/10 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-300">
+                Concepts: <span className="text-indigo-400 font-extrabold">
+                  {selectedGrade === 1 && "Simple sequences"}
+                  {selectedGrade > 1 && LEARNING_STAGES.find((stage) => stage.grade === selectedGrade)?.description}
                 </span>
-                <span className="text-[10px] text-gray-400">{game.subject}</span>
+              </div>
+            </div>
+
+            {/* Path Trail Display */}
+            <div className="relative min-h-[250px] flex flex-col justify-center py-6">
+              
+              {/* Connection Vector Path Dotted Lines */}
+              <div className="absolute inset-0 hidden md:flex items-center pointer-events-none px-12">
+                <svg className="w-full h-2 px-6 opacity-30">
+                  <line x1="0" y1="50%" x2="100%" y2="50%" stroke="white" strokeWidth="4" strokeDasharray="10, 10" />
+                </svg>
+              </div>
+
+              {/* Levels Horizontal/Vertical Grid */}
+              <div className="relative grid grid-cols-2 sm:grid-cols-5 md:grid-cols-10 gap-6 md:gap-4 z-10">
+                {gradeLevels.map((lvl, index) => {
+                  const unlocked = isLevelUnlocked(lvl);
+                  const isCompleted = completedLevels.includes(lvl.id);
+                  const stars = levelStars[lvl.id] || 0;
+
+                  return (
+                    <div key={lvl.id} className="flex flex-col items-center">
+                      <button
+                        onClick={() => unlocked && selectLevel(lvl)}
+                        disabled={!unlocked}
+                        aria-label={unlocked ? `Open challenge ${index + 1}: ${lvl.name}` : `Challenge ${index + 1} locked. Complete challenge ${index} first.`}
+                        title={unlocked ? lvl.name : `Complete Challenge ${index} to unlock`}
+                        className={`w-16 h-16 rounded-full flex flex-col items-center justify-center border-2 transition-all relative ${
+                          isCompleted
+                            ? 'bg-emerald-950/80 border-emerald-500 shadow-lg shadow-emerald-500/10 hover:scale-105 cursor-pointer text-slate-100'
+                            : unlocked
+                              ? 'bg-indigo-950/80 border-indigo-500 hover:border-slate-300 hover:scale-105 cursor-pointer text-slate-100 shadow-lg shadow-indigo-500/10'
+                              : 'bg-navy-dark border-navy-light/20 text-slate-600 cursor-not-allowed'
+                        }`}
+                      >
+                        {/* Lock overlay */}
+                        {!unlocked && (
+                          <Lock className="h-4.5 w-4.5 text-slate-600 mb-0.5" />
+                        )}
+
+                        {/* Level num */}
+                        <span className={`text-base font-black ${!unlocked && 'text-slate-600'}`}>
+                          {index + 1}
+                        </span>
+
+                        {/* Stars preview */}
+                        {isCompleted && (
+                          <div className="absolute -bottom-2 flex items-center justify-center gap-0.5 bg-navy-medium border border-navy-light/30 px-1.5 py-0.5 rounded-full">
+                            {Array.from({ length: 3 }).map((_, sIdx) => (
+                              <Star
+                                key={sIdx}
+                                className={`h-2.5 w-2.5 ${
+                                  sIdx < stars ? 'fill-gold-accent text-gold-accent' : 'text-slate-600'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </button>
+                      <span className="text-[10px] font-black uppercase text-slate-500 mt-3 block text-center truncate w-full max-w-[80px]">
+                        {lvl.name}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {/* Claim XP button */}
-            {!isClaimed ? (
+        </div>
+      ) : activeLevel.grade > 1 ? (
+        <StageGameExperience
+          grade={activeLevel.grade}
+          levelNumber={activeLevel.id - (activeLevel.grade - 1) * 10}
+          onBack={() => setActiveLevel(null)}
+          onComplete={() => handleVictory(3)}
+        />
+      ) : (
+        
+        // LEVEL PLAYROOM WORKSPACE
+        <div className="flex flex-1 flex-col xl:h-[calc(100vh-9.5rem)] xl:min-h-[680px] xl:flex-row xl:overflow-hidden bg-gradient-to-b from-sky-100/10 to-navy-dark">
+          
+          {/* LEFT PANEL: GAME GRID CANVAS VIEW */}
+          <div className="flex w-full flex-col bg-navy-dark border-b border-navy-light/15 xl:w-[64%] xl:border-b-0 xl:border-r xl:overflow-hidden">
+            
+            {/* Mascot Help & Info Header */}
+            <div className="p-4 bg-navy-deep border-b border-navy-light/10 flex items-center justify-between gap-4 shrink-0">
               <button
-                onClick={onClaim}
-                disabled={claimLoading}
-                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 transition-all shadow active:scale-95 disabled:opacity-50"
+                onClick={() => setActiveLevel(null)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy-dark hover:bg-navy-medium border border-navy-light/10 text-xs font-bold text-slate-300 transition-all"
               >
-                <Trophy className="h-3.5 w-3.5" />
-                Mark Complete (+{game.xpReward} XP)
+                <ChevronLeft className="h-4 w-4" />
+                <span>Maps Portal</span>
               </button>
-            ) : (
-              <div className="flex items-center gap-1.5 rounded-xl bg-emerald-600/20 text-emerald-400 text-xs font-bold px-4 py-2 border border-emerald-500/30">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                XP Claimed!
+
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                  Level {activeLevel.grade}-{activeLevel.id - (activeLevel.grade - 1) * 10}
+                </span>
+                <h2 className="text-sm font-extrabold text-slate-200">"{activeLevel.name}"</h2>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs font-black uppercase bg-navy-medium/50 px-2.5 py-1 rounded-lg border border-navy-light/10 text-indigo-400">
+                <Flame className="h-4 w-4 text-orange-500 animate-bounce" />
+                <span>Grade {activeLevel.grade}</span>
+              </div>
+            </div>
+
+            {/* Mascot Instruction Dialog */}
+            <div className="p-4 bg-navy-medium/20 border-b border-navy-light/10 flex items-start space-x-3 shrink-0">
+              <div className="h-10 w-10 rounded-xl overflow-hidden shrink-0 border border-indigo-400/20 bg-indigo-500/10 flex items-center justify-center">
+                {/* Visual parrot/mascot */}
+                <GameIcon name="parrot" className="h-9 w-9" alt="Jocker the parrot" />
+              </div>
+              <div className="bg-navy-deep/80 border border-navy-light/15 rounded-2xl px-4 py-2.5 relative flex-1 text-xs leading-relaxed text-slate-300">
+                <div className="absolute left-[-6px] top-4 w-3 h-3 bg-navy-deep border-b border-l border-navy-light/15 transform rotate-45"></div>
+                <span className="font-extrabold text-[10px] text-indigo-400 block uppercase mb-0.5">Jocker the Parrot Says</span>
+                {gameMessage?.text}
+              </div>
+            </div>
+
+            {/* VISUAL GAME BOARD CANVA PANEL */}
+            <div className="flex min-h-[540px] flex-1 items-center justify-center p-4 md:px-6 md:py-5 xl:min-h-0 bg-[radial-gradient(circle_at_center,#2b6f8f_0%,#102a43_78%)] select-none">
+              
+              {/* SIDE SCROLLER BOX MAP container */}
+              <div className="relative flex h-full max-h-[580px] w-full min-h-[430px] flex-col justify-end overflow-hidden rounded-[2rem] border-[8px] border-sky-400/80 shadow-2xl ring-4 ring-white/10 xl:min-h-0">
+                
+                {/* Background Theme Parallax */}
+                <div className={`absolute inset-0 bg-gradient-to-b ${activeTheme.bg} z-0`}></div>
+
+                {/* Layered world scenery */}
+                <div className="absolute right-[8%] top-[8%] z-[1] h-20 w-20 rounded-full bg-yellow-200/90 shadow-[0_0_45px_rgba(253,224,71,.55)]" />
+                <div className="absolute inset-x-0 bottom-24 z-[1] h-[48%] opacity-45">
+                  <div className="absolute -bottom-12 -left-[8%] h-48 w-[52%] rounded-[50%_50%_0_0] bg-emerald-950/50 rotate-3" />
+                  <div className="absolute -bottom-16 right-[-8%] h-56 w-[64%] rounded-[50%_50%_0_0] bg-teal-950/55 -rotate-3" />
+                </div>
+                <div className="absolute inset-x-0 bottom-16 z-[2] flex items-end justify-around px-6 text-5xl opacity-55 pointer-events-none">
+                  <GameIcon name="pine" className="h-14 w-14" /><GameIcon name="palm" className="h-11 w-11" /><GameIcon name="jungle-tree" className="h-12 w-12" /><GameIcon name="pine" className="h-16 w-16" /><GameIcon name="palm" className="h-14 w-14" /><GameIcon name="jungle-tree" className="h-12 w-12" />
+                </div>
+                
+                {/* Animated clouds live high in the sky, away from the playable road. */}
+                <div className="arcade-sky-cloud absolute left-[8%] top-[8%] z-[2] h-10 w-28 opacity-75" aria-hidden="true" />
+                <div className="arcade-sky-cloud arcade-sky-cloud--slow absolute left-[42%] top-[16%] z-[2] h-8 w-24 opacity-55" aria-hidden="true" />
+                <div className="arcade-sky-cloud arcade-sky-cloud--reverse absolute right-[12%] top-[28%] z-[2] h-9 w-28 opacity-65" aria-hidden="true" />
+
+                {/* Sky elements based on theme */}
+                {selectedGrade >= 10 && (
+                  <div className="absolute inset-0 z-0 opacity-20 bg-[radial-gradient(white_1px,transparent_1px)] bg-[size:16px_16px]"></div>
+                )}
+
+                {/* Cloud World Custom Animated Elements */}
+                {activeTheme.type === 'Sky Haven' && (
+                  <>
+                    {/* Floating hot air balloon */}
+                    <GameIcon name="balloon" className="absolute left-[22%] top-6 z-0 h-10 w-10 animate-bounce opacity-60" />
+                    {/* Flying white peace dove bird */}
+                    <GameIcon name="dove" className="absolute left-[76%] top-14 z-0 h-9 w-9 animate-pulse opacity-50" />
+                  </>
+                )}
+
+                {/* GAME FIELD LAYOUT */}
+                <div className="relative w-full h-[62%] z-10 flex items-end px-5 md:px-8">
+
+                  {/* Hero uses continuous coordinates so movement flows between tiles */}
+                  <div
+                    className="absolute z-40 transition-[left,bottom] ease-in-out"
+                    style={{
+                      left: `calc(${((currentX + 0.5) / 12) * 100}% - 2.1rem)`,
+                      bottom: currentY < 0 ? '-24px' : `${18 + currentY * 76}px`,
+                      transitionDuration: `${Math.max(180, 520 / speed)}ms`
+                    }}
+                  >
+                    <div
+                      className={`arcade-hero arcade-hero--${characterAction} relative flex h-[4.4rem] w-[4.4rem] items-center justify-center rounded-full border-4 border-white/80 bg-emerald-400/20 shadow-[0_12px_20px_rgba(0,0,0,.35)] backdrop-blur-sm`}
+                      style={{ transform: `scaleX(${facing === 'right' ? 1 : -1})` }}
+                    >
+                      {chestOpen && <span className="absolute -top-8 whitespace-nowrap rounded-full bg-yellow-300 px-2 py-1 text-[9px] font-black text-emerald-950 shadow-lg">QUEST CLEAR!</span>}
+                      {currentY === -1 && <GameIcon name="sparkle" className="absolute -top-9 h-8 w-8 animate-spin" />}
+                      <Image
+                        src="/game/monkey-hero.png"
+                        alt="CodeQuest monkey hero"
+                        width={120}
+                        height={120}
+                        priority
+                        className="h-[5.6rem] w-[5.6rem] max-w-none object-contain drop-shadow-[0_5px_4px_rgba(0,0,0,.35)]"
+                      />
+                      <span className="absolute -bottom-2 h-2 w-12 rounded-full bg-black/25 blur-[2px]" />
+                    </div>
+                  </div>
+                  
+                  {/* Grid Column block tiles */}
+                  <div className="w-full grid grid-cols-12 gap-0 items-end">
+                    {Array.from({ length: 12 }).map((_, colIdx) => {
+                      const obstacle = activeLevel.obstacles.find(obs => obs.x === colIdx);
+                      const hasBanana = activeLevel.bananaPos.includes(colIdx) && !collectedBananas.includes(colIdx);
+                      const hasChest = activeLevel.chestPos === colIdx;
+
+                      return (
+                        <div
+                          key={colIdx}
+                          className="relative flex flex-col items-center justify-end h-32"
+                          style={{
+                            // Mark grid column widths evenly
+                            gridColumn: `${colIdx + 1} / span 1`
+                          }}
+                        >
+                          
+                          {/* BANANA */}
+                          {hasBanana && (
+                            <div className="absolute bottom-14 z-20 animate-bounce" style={{ animationDuration: `${2 + (colIdx % 2)}s` }}>
+                              <GameIcon name="banana" className="h-10 w-10 drop-shadow-md" alt="Banana" />
+                            </div>
+                          )}
+
+                          {/* TREASURE CHEST */}
+                          {hasChest && (
+                            <div className="absolute bottom-0 z-20 translate-y-[-2px]">
+                              {chestOpen ? (
+                                <div className="relative flex flex-col items-center">
+                                  <GameIcon name="treasure" className="h-11 w-11 animate-pulse drop-shadow-[0_0_12px_rgba(212,175,55,0.8)]" alt="Open treasure" />
+                                  <GameIcon name="crown" className="absolute -top-5 h-6 w-6 animate-bounce" />
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center">
+                                  <GameIcon name={selectedGrade >= 10 ? 'crown' : 'flag'} className="h-12 w-12 drop-shadow-md" alt="Goal" />
+                                  <span className="mt-1 rounded-full bg-black/25 px-2 py-0.5 text-[8px] font-black text-white">GOAL</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Obstacles (crates, water, hole) */}
+                          {obstacle && (
+                            <div className="absolute bottom-0 w-full z-15">
+                              {obstacle.type === 'crate' && (
+                                <div className="w-12 h-12 mx-auto rounded-lg border-4 border-amber-950/60 bg-gradient-to-br from-amber-500 to-amber-800 flex items-center justify-center shadow-xl font-black text-amber-950 text-xl">
+                                  <GameIcon name="crate" className="h-10 w-10" />
+                                </div>
+                              )}
+                              {obstacle.type === 'breakable' && <GameIcon name="log" className="mx-auto h-12 w-12 drop-shadow-lg" />}
+                              {obstacle.type === 'falling' && <GameIcon name="rock" className="arcade-falling-block mx-auto h-12 w-12 drop-shadow-lg" />}
+                              {obstacle.type === 'spikes' && <GameIcon name="spikes" className="mx-auto h-12 w-12 drop-shadow-lg" />}
+                              {obstacle.type === 'enemy' && <GameIcon name="bug" className="arcade-enemy mx-auto h-12 w-12 drop-shadow-lg" />}
+                            </div>
+                          )}
+                          
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* THE TILED GROUND FLOOR */}
+                <div className={`w-full h-20 ${activeTheme.floor} z-10 px-5 md:px-8 border-t-4 border-emerald-300/40 shadow-[inset_0_8px_0_rgba(255,255,255,.06)]`}>
+                  <div className="w-full grid grid-cols-12 gap-0">
+                    {Array.from({ length: 12 }).map((_, colIdx) => {
+                      const obstacle = activeLevel.obstacles.find(obs => obs.x === colIdx);
+                      const isPit = obstacle && ['hole', 'water', 'spikes', 'enemy'].includes(obstacle.type);
+
+                      if (isPit) {
+                        return (
+                          <div key={colIdx} className="h-20 bg-navy-dark/90 relative flex items-center justify-center">
+                            {obstacle.type === 'water' ? (
+                              <div className="absolute inset-0 bg-blue-600/60 animate-pulse border-t border-blue-400">
+                                <GameIcon name="water" className="mx-auto mt-1 h-8 w-8" />
+                              </div>
+                            ) : obstacle.type === 'spikes' || obstacle.type === 'enemy' ? (
+                              <div className="absolute inset-0 bg-emerald-950/70 border-t border-emerald-400/30" />
+                            ) : (
+                              <div className="absolute inset-0 bg-black/60">
+                                <span className="mx-auto mt-2 block h-5 w-8 rounded-[50%] bg-black/80 shadow-inner" />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={colIdx}
+                          className="h-20 border-r border-navy-light/10 flex flex-col items-center justify-between py-2 relative"
+                          style={{
+                            backgroundColor: colIdx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)'
+                          }}
+                        >
+                          <span className={`text-[10px] font-bold opacity-35 select-none ${activeTheme.type === 'Sky Haven' ? 'text-slate-700' : 'text-slate-500'}`}>{colIdx}</span>
+                          <GameIcon name={activeTheme.groundIcon} className="h-4 w-4 opacity-75" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* RIGHT PANEL: PROGRAMMING INTERFACE */}
+          <div className="flex w-full flex-col overflow-hidden bg-[#d8ebf8] text-navy-dark border-sky-400/80 shadow-2xl xl:w-[36%] xl:min-h-0">
+            
+            {/* WORKSPACE CONTROLS HEADER */}
+            <div className="px-5 py-3 border-b-2 border-sky-300 bg-sky-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+                <h3 className="text-xs font-black uppercase tracking-wider text-sky-900">Build your move sequence</h3>
+              </div>
+
+              {/* Execution Speed toggler */}
+              <div className="flex items-center space-x-1.5 bg-navy-dark border border-navy-light/15 p-1 rounded-xl">
+                <span className="text-[9px] font-black uppercase text-slate-500 px-1.5">Speed:</span>
+                {[1, 2, 4].map(s => (
+                  <button
+                    key={s}
+                    disabled={isRunning}
+                    onClick={() => setSpeed(s)}
+                    className={`px-2 py-0.5 text-[10px] font-black rounded-lg transition-all ${
+                      speed === s 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'text-slate-400 hover:text-white hover:bg-navy-medium'
+                    }`}
+                  >
+                    {s}x
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* DOCK OF sequenced COMMAND SLOTS */}
+            <div className="min-h-0 flex-1 space-y-3 overflow-auto bg-[#cfe6f6] p-4">
+              
+              <div className="flex items-center justify-between text-xs text-sky-800 font-bold uppercase pb-1 border-b border-sky-300">
+                <span>Sequence List</span>
+                <span>{program.length} / {activeLevel.maxSlots} Slots Used</span>
+              </div>
+
+              {program.length === 0 ? (
+                <div className="border-3 border-dashed border-sky-400 rounded-2xl px-6 py-5 text-center text-sky-700 space-y-2 bg-white/35">
+                  <div className="w-10 h-10 rounded-full border border-sky-300 mx-auto flex items-center justify-center bg-white/60">
+                    <Plus className="h-6 w-6 text-slate-400" />
+                  </div>
+                  <div className="text-xs font-bold uppercase tracking-wider">Empty Program</div>
+                  <p className="text-[11px] leading-relaxed text-slate-500 max-w-[250px] mx-auto">
+                    Click the command blocks below to sequence instructions for the monkey.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 pb-1 2xl:grid-cols-2">
+                  {program.map((item, idx) => {
+                    const isExecuting = isRunning && currentStepIdx === idx;
+                    const isLoop = item.type.startsWith('repeat_');
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`min-w-0 rounded-2xl p-3.5 border-2 border-b-4 transition-all relative flex flex-col justify-between ${
+                          isExecuting
+                            ? 'bg-indigo-950/70 border-indigo-400 ring-2 ring-indigo-400/25 scale-[1.03]'
+                            : 'bg-white border-sky-300 hover:border-sky-500 shadow-sm'
+                        }`}
+                      >
+                        {/* Remove block cross */}
+                        <button
+                          disabled={isRunning}
+                          onClick={() => removeCommand(idx)}
+                          className="absolute top-2 right-2 p-1 text-slate-500 hover:text-maple-red hover:bg-navy-medium/40 rounded-lg transition-all cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+
+                        <span className="text-[9px] font-black text-slate-500 uppercase">Slot {idx + 1}</span>
+                        
+                        {/* Command Details */}
+                        <div className="mt-1.5 flex items-center space-x-2">
+                          <GameIcon name={getCommandIconName(item.type)} className="h-8 w-8 shrink-0" />
+                          <div>
+                            <span className="text-xs font-black uppercase text-sky-950">
+                              {item.type === 'forward' && 'Step Forward'}
+                              {item.type === 'backward' && 'Step Backward'}
+                              {item.type === 'turn_left' && 'Turn Left'}
+                              {item.type === 'turn_right' && 'Turn Right'}
+                              {item.type === 'jump' && 'Jump'}
+                              {item.type === 'if_blocked' && 'If Blocked'}
+                              {isLoop && `Repeat`}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Repeat Inline Configuration */}
+                        {isLoop && (
+                          <div className="mt-3 pt-2.5 border-t border-navy-light/10 space-y-1.5">
+                            <div className="flex flex-col">
+                              <span className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Do Action</span>
+                              <select
+                                disabled={isRunning}
+                                value={item.loopAction}
+                                onChange={(e) => updateRepeatConfig(idx, { loopAction: e.target.value as any })}
+                                className="bg-navy-dark text-slate-200 border border-navy-light/20 rounded px-1 py-0.5 text-[10px] font-semibold w-full focus:outline-none"
+                              >
+                                <option value="forward">Step Forward</option>
+                                <option value="backward">Step Backward</option>
+                                <option value="jump">Jump</option>
+                                <option value="turn_left">Turn Around</option>
+                              </select>
+                            </div>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="text-[8px] font-black uppercase text-slate-500">Times:</span>
+                              <div className="flex gap-1">
+                                {[2, 3, 4, 5].map(t => (
+                                  <button
+                                    key={t}
+                                    disabled={isRunning}
+                                    onClick={() => updateRepeatConfig(idx, { loopCount: t, type: `repeat_${t}` as any })}
+                                    className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                                      item.loopCount === t 
+                                        ? 'bg-indigo-500 text-white' 
+                                        : 'bg-navy-medium text-slate-400'
+                                    }`}
+                                  >
+                                    {t}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* If Block config help */}
+                        {item.type === 'if_blocked' && (
+                          <div className="mt-2 pt-2 border-t border-navy-light/10 text-[8px] font-semibold text-slate-400 leading-snug">
+                            Checks next tile. If CRATE, executes <span className="text-amber-400 font-bold">JUMP</span>, else executes <span className="text-indigo-400 font-bold">FORWARD</span>.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+            </div>
+
+            {/* ACTION INPUT PALETTE FOR AVAILABLE BLOCKS */}
+            <div className="px-5 py-4 border-t-2 border-sky-300 bg-sky-100 shrink-0">
+              
+              <div className="text-[10px] font-black uppercase tracking-wider text-sky-800 pb-2.5">
+                Choose a move
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {activeLevel.allowedBlocks.map((block) => {
+                  let color = 'bg-blue-600 border-blue-500 hover:bg-blue-500';
+                  let label: string = block;
+                  let icon: GameIconName = 'forward';
+
+                  if (block === 'backward') {
+                    color = 'bg-sky-600 border-sky-500 hover:bg-sky-500';
+                    icon = 'backward';
+                  } else if (block.startsWith('turn_')) {
+                    color = 'bg-purple-600 border-purple-500 hover:bg-purple-500';
+                    icon = 'turn';
+                    label = block === 'turn_left' ? 'turn left' : 'turn right';
+                  } else if (block === 'jump') {
+                    color = 'bg-amber-600 border-amber-500 hover:bg-amber-500';
+                    icon = 'jump';
+                  } else if (block.startsWith('repeat_')) {
+                    color = 'bg-yellow-600 border-yellow-500 hover:bg-yellow-500 text-yellow-950 font-black';
+                    icon = 'repeat';
+                    const count = block.split('_')[1];
+                    label = `Repeat ${count}x`;
+                  } else if (block === 'if_blocked') {
+                    color = 'bg-emerald-600 border-emerald-500 hover:bg-emerald-500';
+                    icon = 'condition';
+                    label = 'If Blocked';
+                  }
+
+                  return (
+                    <button
+                      key={block}
+                      disabled={isRunning}
+                      onClick={() => addCommand(block)}
+                      className={`quest-button min-w-32 px-5 py-3 rounded-2xl border text-sm font-black uppercase tracking-wide flex items-center justify-center space-x-2 transition-all active:scale-95 shadow-md disabled:opacity-50 disabled:pointer-events-none cursor-pointer ${color}`}
+                    >
+                      <GameIcon name={icon} className="h-7 w-7" />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+            </div>
+
+            {/* RUN & CLEAR ACTIONS CONSOLE FOOTER */}
+            <div className="p-4 border-t-2 border-sky-300 bg-sky-200 flex items-center justify-between gap-4 shrink-0">
+              
+              <button
+                disabled={isRunning || program.length === 0}
+                onClick={clearProgram}
+                className="px-5 py-3 rounded-2xl border-2 border-sky-400 bg-white/55 hover:bg-white text-xs font-black uppercase text-sky-900 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="h-4.5 w-4.5" />
+                <span>Clear</span>
+              </button>
+
+              <div className="flex-1 flex gap-2">
+                {isRunning ? (
+                  <button
+                    onClick={() => {
+                      setIsRunning(false);
+                      resetSandbox();
+                    }}
+                    className="quest-button w-full py-4 rounded-2xl bg-maple-red hover:bg-red-600 text-white font-black text-base uppercase transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <RotateCcw className="h-5 w-5" />
+                    <span>Stop & Reset</span>
+                  </button>
+                ) : (
+                  <button
+                    disabled={program.length === 0}
+                    onClick={runProgram}
+                    className="quest-button w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-base uppercase transition-all shadow-lg shadow-emerald-700/20 active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Play className="h-5 w-5 fill-white text-white" />
+                    <span>Play My Moves</span>
+                  </button>
+                )}
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* LEVEL COMPLETED CELEBRATION MODAL */}
+      {showWinModal && activeLevel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-dark/95 p-4 animate-fade-in">
+          <div className="relative w-full max-w-md overflow-hidden rounded-3xl border-2 border-gold-accent bg-navy-deep p-8 text-center shadow-2xl">
+            {/* Sparkles accent glows */}
+            <div className="absolute -left-10 -top-10 h-40 w-40 rounded-full bg-gold-accent/10 blur-2xl pointer-events-none"></div>
+            <div className="absolute -right-10 -bottom-10 h-40 w-40 rounded-full bg-indigo-500/10 blur-2xl pointer-events-none"></div>
+            
+            {/* Victory Badge icon */}
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-gold-accent to-amber-500 text-navy-dark shadow-xl animate-bounce">
+              <Award className="h-10 w-10" />
+            </div>
+
+            <h1 className="mt-6 text-2xl font-black text-slate-100 uppercase tracking-widest leading-none">
+              Level Completed!
+            </h1>
+            <p className="mt-2 text-xs text-slate-400 font-semibold uppercase">
+              {activeLevel.name}
+            </p>
+
+            {activeLevel.id % 10 !== 0 && (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-emerald-300">
+                <Lock className="h-4 w-4" />
+                Challenge {(activeLevel.id % 10) + 1} unlocked
               </div>
             )}
 
-            {/* Open in new tab */}
-            <a
-              href={game.externalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 rounded-xl bg-navy-medium hover:bg-navy-light/30 text-gray-300 text-xs font-bold px-3 py-2 transition-all border border-navy-light/20"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">New Tab</span>
-            </a>
-
-            <button
-              onClick={onClose}
-              className="rounded-xl p-2 text-gray-400 hover:text-white hover:bg-navy-medium transition"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Iframe area */}
-        <div className="flex-1 relative bg-navy-dark overflow-hidden min-h-[640px]">
-          {/* Loading spinner — shown until iframe fires onLoad */}
-          {!iframeLoaded && !showFallback && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10">
-              <div className="h-12 w-12 rounded-full border-4 border-gold-accent border-t-transparent animate-spin" />
-              <p className="text-xs text-gray-400 font-semibold">Loading {game.title}…</p>
+            {/* Stars Reward visual */}
+            <div className="mt-6 flex justify-center items-center space-x-3.5">
+              {[1, 2, 3].map((starNum) => (
+                <Star
+                  key={starNum}
+                  className={`h-11 w-11 transition-all ${
+                    starNum <= earnedStars 
+                      ? 'fill-gold-accent text-gold-accent scale-110 drop-shadow-[0_0_8px_rgba(212,175,55,0.5)]' 
+                      : 'text-slate-700'
+                  }`}
+                />
+              ))}
             </div>
-          )}
 
-          {/* Fallback — shown if iframe doesn't load in 4s (likely blocked) */}
-          {showFallback && !iframeLoaded && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 z-10 bg-navy-dark text-center px-8">
-              <div className="text-5xl">{game.thumbnail}</div>
-              <div>
-                <h3 className="text-base font-black text-white mb-1">Can&apos;t load in-page</h3>
-                <p className="text-sm text-gray-400 max-w-sm">
-                  This game&apos;s server blocked the embedded preview. Click the button below to play in a new tab — then
-                  come back and mark it complete to earn your XP!
-                </p>
+            {/* Platform Gamified Rewards Card */}
+            <div className="mt-8 rounded-2xl bg-navy-dark border border-navy-light/10 p-5 space-y-4">
+              <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Rewards Unlocked</div>
+              
+              <div className="flex items-center justify-center space-x-8">
+                <div className="flex items-center space-x-2 text-slate-200">
+                  <GameIcon name="gem" className="h-9 w-9" />
+                  <div className="text-left leading-none">
+                    <span className="block text-[9px] font-bold text-slate-500 uppercase">XP Reward</span>
+                    <span className="text-base font-black">+{activeLevel.grade * 15} XP</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2 text-slate-200">
+                  <GameIcon name="coin" className="h-9 w-9" />
+                  <div className="text-left leading-none">
+                    <span className="block text-[9px] font-bold text-slate-500 uppercase">Coins Reward</span>
+                    <span className="text-base font-black">+{activeLevel.grade * 5} Coins</span>
+                  </div>
+                </div>
               </div>
-              <a
-                href={game.externalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-xl bg-maple-red hover:bg-maple-light text-white font-bold px-6 py-3 transition-all shadow-lg active:scale-95"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Open {game.title} in New Tab
-              </a>
-              {!isClaimed && (
+
+              {!rewardsClaimed ? (
                 <button
-                  onClick={onClaim}
-                  disabled={claimLoading}
-                  className="flex items-center gap-1.5 rounded-xl bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 text-sm font-bold px-5 py-2.5 hover:bg-emerald-600/50 transition active:scale-95 disabled:opacity-50"
+                  onClick={claimRewards}
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs uppercase tracking-wide transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Mark Complete (+{game.xpReward} XP)
+                  <Sparkles className="h-4.5 w-4.5" />
+                  <span>Claim Rewards & Save Progress</span>
                 </button>
-              )}
-              {isClaimed && (
-                <div className="flex items-center gap-1.5 text-emerald-400 text-sm font-bold">
-                  <CheckCircle2 className="h-4 w-4" /> XP Already Claimed!
+              ) : (
+                <div className="flex items-center justify-center space-x-1.5 text-xs text-emerald-400 font-extrabold py-2 uppercase bg-emerald-500/5 rounded-xl border border-emerald-500/20">
+                  <CheckCircle2 className="h-4.5 w-4.5" />
+                  <span>XP & Coins Added to Profile!</span>
                 </div>
               )}
             </div>
-          )}
 
-          {/* The iframe itself */}
-          <iframe
-            key={game.id}
-            src={game.embedUrl}
-            title={game.title}
-            width="100%"
-            height="100%"
-            className="w-full h-full"
-            style={{ minHeight: '620px', border: 'none', display: 'block' }}
-            allow="autoplay; fullscreen"
-            allowFullScreen
-            onLoad={onLoad}
-            onError={() => setShowFallback(true)}
-          />
-        </div>
+            {/* Next buttons actions */}
+            <div className="mt-8 grid grid-cols-2 gap-3.5">
+              <button
+                onClick={() => {
+                  setShowWinModal(false);
+                  resetSandbox();
+                }}
+                className="py-3 rounded-xl border border-navy-light/15 hover:border-slate-500 font-extrabold text-xs text-slate-300 hover:text-white uppercase transition-all active:scale-95 cursor-pointer"
+              >
+                Replay Level
+              </button>
+              
+              <button
+                onClick={loadNextLevel}
+                className="py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-600/10 active:scale-95 flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>Next Level</span>
+                <ChevronRight className="h-4.5 w-4.5" />
+              </button>
+            </div>
 
-        {/* Footer hint */}
-        <div className="flex items-center gap-2 px-5 py-2.5 bg-navy-dark/60 border-t border-navy-light/15 text-[10px] text-gray-500 shrink-0">
-          <Info className="h-3 w-3 shrink-0" />
-          <span>
-            Play the game, then click <strong className="text-emerald-400">Mark Complete</strong> to earn{' '}
-            <strong className="text-gold-accent">+{game.xpReward} XP</strong> and{' '}
-            <strong className="text-amber-400">+{game.coinReward} Coins</strong>. XP can only be claimed once per game.
-          </span>
+          </div>
         </div>
-      </div>
+      )}
+
     </div>
   );
 }

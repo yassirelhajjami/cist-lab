@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 @theme {
-  --color-navy-dark: #0f1e2d;     /* Moodle dark corporate slate */
-  --color-navy-deep: #1e3d59;     /* Moodle medium blue-gray */
-  --color-navy-medium: #1177d0;   /* Moodle standard blue link/action button color */
-  --color-navy-light: #4499ee;    /* Moodle light blue highlight */
-  --color-maple-red: #c1392b;     /* Moodle corporate danger alert */
+  --color-navy-dark: #102a43;
+  --color-navy-deep: #173f5f;
+  --color-navy-medium: #168aad;
+  --color-navy-light: #56cfe1;
+  --color-maple-red: #f05d5e;
   --color-maple-dark: #962c22;
   --color-maple-light: #e74c3c;
-  --color-gold-accent: #f25c27;   /* Moodle primary Brand Orange */
-  --color-gold-hover: #d3481b;    /* Moodle hover brand orange */
-  --color-gold-light: #ffaa88;    /* Moodle light orange highlight */
+  --color-gold-accent: #ffb703;
+  --color-gold-hover: #fb8500;
+  --color-gold-light: #ffe082;
   
   --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-float: float 4s ease-in-out infinite;
@@ -26,8 +26,66 @@
   to   { opacity: 1; transform: translateY(0)   scale(1); }
 }
 
+@keyframes arcade-idle {
+  0%, 100% { translate: 0 0; rotate: -2deg; }
+  50% { translate: 0 -5px; rotate: 2deg; }
+}
+
+@keyframes arcade-walk {
+  0%, 100% { translate: 0 0; rotate: -7deg; }
+  50% { translate: 0 -11px; rotate: 7deg; }
+}
+
+@keyframes arcade-jump {
+  0%, 100% { scale: 1 1; }
+  45% { scale: .9 1.12; }
+  75% { scale: 1.1 .9; }
+}
+
+@keyframes arcade-fall {
+  to { rotate: 90deg; scale: .8; opacity: .65; }
+}
+
+.arcade-hero--idle { animation: arcade-idle 1.8s ease-in-out infinite; }
+.arcade-hero--walk { animation: arcade-walk .28s ease-in-out infinite; }
+.arcade-hero--jump { animation: arcade-jump .55s ease-in-out infinite; }
+.arcade-hero--fall { animation: arcade-fall .55s ease-in forwards; }
+.arcade-hero--celebrate { animation: arcade-walk .35s ease-in-out infinite; }
+
+@keyframes arcade-enemy-patrol {
+  0%, 100% { translate: -10px 0; scale: 1 1; }
+  50% { translate: 10px 0; scale: -1 1; }
+}
+
+@keyframes arcade-falling-block {
+  0%, 70%, 100% { translate: 0 0; }
+  78% { translate: -2px 0; }
+  86% { translate: 2px 2px; }
+  94% { translate: -1px 1px; }
+}
+
+@keyframes arcade-cloud-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(32px, -5px, 0); }
+}
+
+.arcade-enemy { animation: arcade-enemy-patrol 1.5s ease-in-out infinite; }
+.arcade-falling-block { animation: arcade-falling-block 2.2s ease-in-out infinite; }
+.arcade-sky-cloud {
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow:
+    22px -14px 0 2px rgba(255, 255, 255, .92),
+    50px -5px 0 5px rgba(255, 255, 255, .92),
+    0 9px 24px rgba(14, 116, 144, .18);
+  animation: arcade-cloud-drift 8s ease-in-out infinite;
+  filter: blur(.2px);
+}
+.arcade-sky-cloud--slow { animation-duration: 12s; }
+.arcade-sky-cloud--reverse { animation-direction: reverse; animation-duration: 10s; }
+
 :root {
-  --background: #f8fafc;
+  --background: #f3fbf6;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
@@ -47,6 +105,73 @@ body {
   color: var(--foreground);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   transition: background-color 0.3s, color 0.3s;
+}
+
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid #56cfe1;
+  outline-offset: 3px;
+}
+
+.quest-world {
+  background-color: #f3fbf6;
+  background-image:
+    radial-gradient(circle at 12% 12%, rgba(82, 183, 136, 0.12) 0 90px, transparent 92px),
+    radial-gradient(circle at 88% 18%, rgba(86, 207, 225, 0.13) 0 120px, transparent 122px),
+    linear-gradient(rgba(255,255,255,.68), rgba(255,255,255,.68)),
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(16, 42, 67, .025) 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(16, 42, 67, .025) 32px);
+}
+
+.quest-card {
+  border: 2px solid #d9eee1;
+  border-bottom-width: 5px;
+  border-radius: 1.5rem;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 12px 30px rgba(23, 63, 95, .07);
+}
+
+.quest-card-hover {
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+
+.quest-card-hover:hover {
+  transform: translateY(-4px);
+  border-color: #95d5b2;
+  box-shadow: 0 18px 36px rgba(23, 63, 95, .12);
+}
+
+.quest-button {
+  border-bottom: 4px solid rgba(0,0,0,.2);
+  transition: transform .15s ease, filter .15s ease, border-width .15s ease;
+}
+
+.quest-button:hover { filter: brightness(1.04); transform: translateY(-1px); }
+.quest-button:active { transform: translateY(2px); border-bottom-width: 2px; }
+
+.quest-kicker {
+  font-size: .7rem;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #2d6a4f;
+}
+
+.quest-progress {
+  overflow: hidden;
+  border: 2px solid #d8eee0;
+  border-radius: 999px;
+  background: #edf7f0;
+  padding: 2px;
+}
+
+.quest-progress > div {
+  border-radius: inherit;
+  background: linear-gradient(90deg, #52b788, #80ed99);
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,.12);
 }
 
 /* Custom Scrollbar for premium feel */
@@ -77,7 +202,7 @@ body {
 }
 
 .gold-gradient {
-  background: linear-gradient(135deg, #f25c27 0%, #ffaa88 100%);
+  background: linear-gradient(135deg, #ffb703 0%, #ffd166 100%);
 }
 
 .maple-gradient {
@@ -85,7 +210,7 @@ body {
 }
 
 .navy-gradient {
-  background: linear-gradient(135deg, #1e3d59 0%, #0f1e2d 100%);
+  background: linear-gradient(135deg, #173f5f 0%, #102a43 100%);
 }
 
 /* Issue #10: animate-fade-in was used in JSX but never defined */

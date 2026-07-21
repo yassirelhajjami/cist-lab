@@ -87,7 +87,7 @@ export default function AdminSettingsPage() {
     localStorage.setItem('cist_cq_settings', JSON.stringify(settingsObj));
 
     setMsg('🧪 Sending test webhook alert...');
-    await triggerWebhookAlert(
+    const result = await triggerWebhookAlert(
       '🧪 Webhook Connection Test',
       'This is a manual configuration test alert sent from the CIST CodeQuest control deck.',
       [
@@ -95,9 +95,13 @@ export default function AdminSettingsPage() {
         { name: 'Dispatched By', value: 'System Admin', inline: true }
       ]
     );
-    setMsg('🎉 Success! Test webhook connection executed.');
+    if (result && (result as any).success) {
+      setMsg('🎉 Success! Test webhook connection executed.');
+    } else {
+      setMsg(`❌ Webhook failed: ${(result as any)?.error || 'Unknown error'}`);
+    }
     loadLogs();
-    setTimeout(() => setMsg(''), 4000);
+    setTimeout(() => setMsg(''), 5000);
   };
 
   return (

@@ -182,20 +182,38 @@ export default function JockerAI() {
     return defaults[Math.floor(Math.random() * defaults.length)];
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
     const userText = inputText;
-    setMessages(prev => [...prev, { sender: 'student', text: userText }]);
+    const nextMessages = [...messages, { sender: 'student' as const, text: userText }];
+    setMessages(nextMessages);
     setInputText('');
     setIsTyping(true);
 
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: nextMessages.slice(-12).map((message) => ({
+            role: message.sender === 'student' ? 'user' : 'assistant',
+            content: message.text
+          }))
+        })
+      });
+
+      if (!response.ok) throw new Error('AI chat unavailable');
+      const data = await response.json() as { reply?: string };
+      if (!data.reply) throw new Error('Empty AI response');
+
       setIsTyping(false);
-      const reply = generateJockerResponse(userText);
-      setMessages(prev => [...prev, { sender: 'jocker', text: reply }]);
-    }, 1000);
+      setMessages(prev => [...prev, { sender: 'jocker', text: data.reply as string }]);
+    } catch {
+      setIsTyping(false);
+      setMessages(prev => [...prev, { sender: 'jocker', text: generateJockerResponse(userText) }]);
+    }
   };
 
   return (

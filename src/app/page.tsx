@@ -3,16 +3,24 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { BookOpen, Trophy, Cpu, Gamepad2, ArrowRight, ShieldCheck, Flame, Award, Sparkles } from 'lucide-react';
+import { BookOpen, Trophy, Cpu, Gamepad2, ArrowRight, ShieldCheck, Flame, Award } from 'lucide-react';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-navy-dark text-white selection:bg-maple-red selection:text-white overflow-x-hidden">
+    <div className="relative min-h-screen bg-navy-dark text-white selection:bg-maple-red selection:text-white overflow-x-hidden">
+      {/* Background Jarvis Image with Overlay */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none opacity-25 z-0"
+        style={{ backgroundImage: "url('/jarvis.png')" }}
+      />
+      {/* Gradient to smooth visibility and maintain readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-navy-dark/85 to-navy-dark pointer-events-none z-0" />
+
       {/* Decorative Top Accent */}
-      <div className="h-2 w-full bg-gradient-to-r from-maple-red via-gold-accent to-navy-medium"></div>
+      <div className="h-2 w-full bg-gradient-to-r from-maple-red via-gold-accent to-navy-medium relative z-10"></div>
 
       {/* Navigation Header */}
-      <header className="mx-auto max-w-7xl px-6 py-6 flex items-center justify-between">
+      <header className="relative z-10 mx-auto max-w-7xl px-6 py-6 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <img src="/cist.png" alt="CIST Logo" className="h-10 w-10 object-contain rounded-xl shadow-lg border border-navy-light/10 bg-white p-0.5" />
           <div>
@@ -25,12 +33,22 @@ export default function Home() {
           </div>
         </div>
 
-        <Link
-          href="/login"
-          className="rounded-lg bg-navy-medium hover:bg-navy-light px-5 py-2 text-sm font-bold border border-navy-light/35 transition hover:shadow-md"
-        >
-          Portal Login
-        </Link>
+        <div className="flex items-center space-x-3">
+          <a
+            href="https://averroescenter.org/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg bg-navy-deep/40 hover:bg-navy-deep/75 px-5 py-2 text-sm font-bold border border-navy-light/20 transition hover:shadow-md text-gray-300 hover:text-white"
+          >
+            Log in to averroescenter
+          </a>
+          <Link
+            href="/login"
+            className="rounded-lg bg-navy-medium hover:bg-navy-light px-5 py-2 text-sm font-bold border border-navy-light/35 transition hover:shadow-md"
+          >
+            Portal Login
+          </Link>
+        </div>
       </header>
 
       {/* Hero Section */}
@@ -40,12 +58,6 @@ export default function Home() {
         <div className="absolute -right-20 top-10 h-72 w-72 rounded-full bg-gold-accent/10 blur-3xl"></div>
 
         <div className="relative z-10 max-w-3xl mx-auto">
-          {/* Tag */}
-          <div className="mx-auto inline-flex items-center space-x-2 rounded-full bg-navy-medium/60 px-4 py-1.5 border border-navy-light/40 text-gold-accent text-xs font-semibold uppercase tracking-wider mb-6 animate-pulse">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>Next Generation Computer Science Academy</span>
-          </div>
-
           <h1 className="text-4xl sm:text-6xl font-black uppercase tracking-tight text-white leading-tight">
             CIST <span className="text-gold-accent">CodeQuest</span>
           </h1>
@@ -75,7 +87,7 @@ export default function Home() {
       </section>
 
       {/* Gamified Core Features Grid */}
-      <section className="mx-auto max-w-7xl px-6 py-12 border-t border-navy-light/20">
+      <section className="relative z-10 mx-auto max-w-7xl px-6 py-12 border-t border-navy-light/20">
         <h2 className="text-center text-2xl sm:text-3xl font-black uppercase tracking-wider text-white">
           Platform Achievements
         </h2>
@@ -131,7 +143,7 @@ export default function Home() {
       </section>
 
       {/* Safety Section */}
-      <section className="bg-navy-deep/40 py-16 border-t border-navy-light/20">
+      <section className="relative z-10 bg-navy-deep/40 py-16 border-t border-navy-light/20">
         <div className="mx-auto max-w-5xl px-6 flex flex-col md:flex-row items-center justify-between gap-10">
           <div className="max-w-xl">
             <div className="flex items-center space-x-2 text-gold-accent font-black uppercase text-xs tracking-wider mb-2">
@@ -174,7 +186,7 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="mx-auto max-w-7xl px-6 py-12 border-t border-navy-light/25 flex flex-col md:flex-row items-center justify-between text-xs text-gray-400 gap-6">
+      <footer className="relative z-10 mx-auto max-w-7xl px-6 py-12 border-t border-navy-light/25 flex flex-col md:flex-row items-center justify-between text-xs text-gray-400 gap-6">
         <div>
           <p>© 2026 Canadian International School Tangier. All rights reserved.</p>
         </div>

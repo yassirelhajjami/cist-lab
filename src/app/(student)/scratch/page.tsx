@@ -2,31 +2,28 @@
 'use client';
 
 import React from 'react';
-import { useApp } from '@/context/AppContext';
 import { Puzzle, Sparkles, BookOpen } from 'lucide-react';
 
 export default function ScratchSandboxPage() {
-  const { student } = useApp();
-
   return (
-    <div className="-m-4 md:-m-6 lg:-m-8 flex flex-col md:flex-row bg-navy-dark h-[calc(100vh-5rem)] md:h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-6rem)] text-slate-100 overflow-hidden">
+    <div className="-m-4 md:-m-6 lg:-m-8 flex flex-col md:flex-row bg-navy-dark h-[calc(100vh-4.5rem)] text-slate-100 overflow-hidden md:rounded-tl-[2rem]">
       
       {/* Tutorial/Tips Panel */}
-      <div className="w-full md:w-80 bg-navy-deep border-b md:border-b-0 md:border-r border-navy-light/15 flex flex-col justify-between shrink-0 h-48 md:h-full overflow-y-auto">
+      <div className="w-full md:w-80 bg-gradient-to-b from-emerald-800 to-teal-950 border-b md:border-b-0 md:border-r border-white/10 flex flex-col justify-between shrink-0 h-48 md:h-full overflow-y-auto">
         <div className="p-4.5 space-y-4">
           <div className="flex items-center space-x-2 border-b border-navy-light/10 pb-3">
             <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400">
               <Puzzle className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-sm font-black uppercase tracking-wider text-slate-200 leading-none">Scratch Sandbox</h2>
-              <span className="text-[9px] font-bold text-slate-500 uppercase mt-1 block">Visual Block Programming</span>
+              <h2 className="text-sm font-black uppercase tracking-wider text-white leading-none">Block Jungle</h2>
+              <span className="text-[9px] font-bold text-emerald-200/70 uppercase mt-1 block">Build stories with code blocks</span>
             </div>
           </div>
 
           <div className="space-y-3.5 text-xs text-slate-400">
             <p className="leading-relaxed">
-              Drag and drop visual code blocks to build animations, interactive stories, and gaming logic.
+              Welcome, explorer! Snap colorful blocks together to bring characters, stories, and games to life.
             </p>
 
             <div className="rounded-xl bg-navy-dark/40 border border-navy-light/10 p-3 space-y-2">

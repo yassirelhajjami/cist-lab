@@ -17,180 +17,10 @@ export const INITIAL_PROFILES = [
     rank_title: 'CIST Tech Hero',
     created_at: new Date('2026-06-01').toISOString(),
     updated_at: new Date('2026-06-15').toISOString()
-  },
-  {
-    id: '01111111-1111-1111-1111-111111111111',
-    user_id: 'auth-adam-id',
-    full_name: 'Adam Belghiti',
-    email: 'adam.b@cist.edu',
-    role: 'student',
-    grade: 'Grade 10',
-    avatar_url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=adam',
-    status: 'active',
-    xp: 1250,
-    coins: 240,
-    level: 4,
-    rank_title: 'Bug Hunter',
-    created_at: new Date('2026-06-02').toISOString(),
-    updated_at: new Date('2026-06-15').toISOString()
-  },
-  {
-    id: '02222222-2222-2222-2222-222222222222',
-    user_id: 'auth-sofia-id',
-    full_name: 'Sofia Mansouri',
-    email: 'sofia.m@cist.edu',
-    role: 'student',
-    grade: 'Grade 9',
-    avatar_url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=sofia',
-    status: 'active',
-    xp: 2400,
-    coins: 310,
-    level: 5,
-    rank_title: 'Algorithm Master',
-    created_at: new Date('2026-06-03').toISOString(),
-    updated_at: new Date('2026-06-15').toISOString()
-  },
-  {
-    id: '03333333-3333-3333-3333-333333333333',
-    user_id: 'auth-ryan-id',
-    full_name: 'Ryan Benjelloun',
-    email: 'ryan.b@cist.edu',
-    role: 'student',
-    grade: 'Grade 11',
-    avatar_url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=ryan',
-    status: 'active',
-    xp: 320,
-    coins: 90,
-    level: 2,
-    rank_title: 'Code Explorer',
-    created_at: new Date('2026-06-04').toISOString(),
-    updated_at: new Date('2026-06-15').toISOString()
-  },
-  {
-    id: '04444444-4444-4444-4444-444444444444',
-    user_id: 'auth-yasmine-id',
-    full_name: 'Yasmine Tazi',
-    email: 'yasmine.t@cist.edu',
-    role: 'student',
-    grade: 'Grade 10',
-    avatar_url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=yasmine',
-    status: 'active',
-    xp: 3800,
-    coins: 420,
-    level: 6,
-    rank_title: 'Robotics Engineer',
-    created_at: new Date('2026-06-05').toISOString(),
-    updated_at: new Date('2026-06-15').toISOString()
-  },
-  {
-    id: '05555555-5555-5555-5555-555555555555',
-    user_id: 'auth-nabil-id',
-    full_name: 'Nabil El Fassi',
-    email: 'nabil.f@cist.edu',
-    role: 'student',
-    grade: 'Grade 12',
-    avatar_url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=nabil',
-    status: 'active',
-    xp: 780,
-    coins: 150,
-    level: 3,
-    rank_title: 'Logic Builder',
-    created_at: new Date('2026-06-06').toISOString(),
-    updated_at: new Date('2026-06-15').toISOString()
-  },
-  {
-    id: '06666666-6666-6666-6666-666666666666',
-    user_id: 'auth-samia-id',
-    full_name: 'Samia Mansouri',
-    email: 'samia.m@cist.edu',
-    password: 'mock-password-samia',
-    role: 'student',
-    grade: 'Grade 10',
-    avatar_url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=samia',
-    status: 'active',
-    xp: 540,
-    coins: 110,
-    level: 3,
-    rank_title: 'Logic Builder',
-    created_at: new Date('2026-06-07').toISOString(),
-    updated_at: new Date('2026-06-15').toISOString()
   }
 ];
 
-export const INITIAL_STUDENTS = [
-  {
-    id: 'd1111111-1111-1111-1111-111111111111',
-    profile_id: '01111111-1111-1111-1111-111111111111',
-    student_code: 'CIST-10-0982',
-    grade: 'Grade 10',
-    classroom: 'Room 204',
-    date_of_birth: '2010-04-12',
-    parent_contact: '+212-661-234567',
-    notes: 'Enjoys game design and microcontrollers.',
-    status: 'active',
-    created_at: new Date('2026-06-02').toISOString()
-  },
-  {
-    id: 'd2222222-2222-2222-2222-222222222222',
-    profile_id: '02222222-2222-2222-2222-222222222222',
-    student_code: 'CIST-09-0821',
-    grade: 'Grade 9',
-    classroom: 'Room 102',
-    date_of_birth: '2011-09-18',
-    parent_contact: '+212-661-876543',
-    notes: 'Exhibits fast analytical and debugging skills.',
-    status: 'active',
-    created_at: new Date('2026-06-03').toISOString()
-  },
-  {
-    id: 'd3333333-3333-3333-3333-333333333333',
-    profile_id: '03333333-3333-3333-3333-333333333333',
-    student_code: 'CIST-11-0422',
-    grade: 'Grade 11',
-    classroom: 'Room 301',
-    date_of_birth: '2009-01-30',
-    parent_contact: '+212-662-112233',
-    notes: 'Very creative with UI concepts.',
-    status: 'active',
-    created_at: new Date('2026-06-04').toISOString()
-  },
-  {
-    id: 'd4444444-4444-4444-4444-444444444444',
-    profile_id: '04444444-4444-4444-4444-444444444444',
-    student_code: 'CIST-10-0382',
-    grade: 'Grade 10',
-    classroom: 'Room 204',
-    date_of_birth: '2010-11-05',
-    parent_contact: '+212-661-998877',
-    notes: 'Focused on AI research and computer vision models.',
-    status: 'active',
-    created_at: new Date('2026-06-05').toISOString()
-  },
-  {
-    id: 'd5555555-5555-5555-5555-555555555555',
-    profile_id: '05555555-5555-5555-5555-555555555555',
-    student_code: 'CIST-12-0199',
-    grade: 'Grade 12',
-    classroom: 'Room 312',
-    date_of_birth: '2008-07-22',
-    parent_contact: '+212-663-445566',
-    notes: 'Learning Python scripting, preparing for university CS.',
-    status: 'active',
-    created_at: new Date('2026-06-06').toISOString()
-  },
-  {
-    id: 'd6666666-6666-6666-6666-666666666666',
-    profile_id: '06666666-6666-6666-6666-666666666666',
-    student_code: 'CIST-10-0613',
-    grade: 'Grade 10',
-    classroom: 'Room 204',
-    date_of_birth: '2010-03-15',
-    parent_contact: '+212-661-776655',
-    notes: 'Test student account.',
-    status: 'active',
-    created_at: new Date('2026-06-07').toISOString()
-  }
-];
+export const INITIAL_STUDENTS: any[] = [];
 
 export const INITIAL_MISSIONS = [
   {
@@ -718,313 +548,100 @@ export const INITIAL_CHALLENGES = [
 export const INITIAL_BADGES = [
   {
     id: 'b1111111-1111-1111-1111-111111111111',
-    name: 'Python Starter',
-    description: 'Unlocked by completing the Python Basics introductory mission.',
-    icon_url: 'Trophy',
+    name: 'Iron Coder',
+    description: 'Start your CS journey by completing the Python Basics introductory path.',
+    icon_url: 'Iron',
     requirement_type: 'mission',
     requirement_value: 1,
     created_at: new Date('2026-06-01').toISOString()
   },
   {
     id: 'b2222222-2222-2222-2222-222222222222',
-    name: 'Loop Master',
-    description: 'Demonstrate loops expertise by completing 3 loops exercises.',
-    icon_url: 'Infinity',
+    name: 'Bronze Operator',
+    description: 'Demonstrate basic logic by solving 3 code challenges.',
+    icon_url: 'Bronze',
     requirement_type: 'challenge',
     requirement_value: 3,
     created_at: new Date('2026-06-01').toISOString()
   },
   {
     id: 'b3333333-3333-3333-3333-333333333333',
-    name: 'Bug Hunter',
-    description: 'Squash bugs in the Code Lab arena.',
-    icon_url: 'Bug',
+    name: 'Silver Specialist',
+    description: 'Detect and squash 5 syntax or logic bugs in the Bug Hunter arena.',
+    icon_url: 'Silver',
     requirement_type: 'challenge',
     requirement_value: 5,
     created_at: new Date('2026-06-01').toISOString()
   },
   {
     id: 'b4444444-4444-4444-4444-444444444444',
-    name: 'Robotics Builder',
-    description: 'Complete the virtual robot maze logic mission.',
-    icon_url: 'Bot',
+    name: 'Gold Sentinel',
+    description: 'Command robotic algorithms by solving the virtual robot maze path.',
+    icon_url: 'Gold',
     requirement_type: 'mission',
     requirement_value: 1,
     created_at: new Date('2026-06-01').toISOString()
   },
   {
     id: 'b5555555-5555-5555-5555-555555555555',
-    name: 'Project Creator',
-    description: 'Submit a custom software project and receive teacher approval.',
-    icon_url: 'Palette',
+    name: 'Platinum Duelist',
+    description: 'Design and deploy an approved custom showcase software project.',
+    icon_url: 'Platinum',
     requirement_type: 'project',
     requirement_value: 1,
     created_at: new Date('2026-06-01').toISOString()
   },
   {
     id: 'b6666666-6666-6666-6666-666666666666',
-    name: 'CIST Tech Hero',
-    description: 'Reach CIST elite levels by gaining over 5,000 total XP.',
-    icon_url: 'Zap',
+    name: 'Diamond Initiator',
+    description: 'Reach elite rank status by gaining over 5,000 total XP.',
+    icon_url: 'Diamond',
     requirement_type: 'xp',
     requirement_value: 5000,
+    created_at: new Date('2026-06-01').toISOString()
+  },
+  {
+    id: 'b7777777-7777-7777-7777-777777777777',
+    name: 'Ascendant Controller',
+    description: 'Prove command of senior concepts by earning over 7,500 total XP.',
+    icon_url: 'Ascendant',
+    requirement_type: 'xp',
+    requirement_value: 7500,
+    created_at: new Date('2026-06-01').toISOString()
+  },
+  {
+    id: 'b8888888-8888-8888-8888-888888888888',
+    name: 'Immortal Sentinel',
+    description: 'Attain master programmer status by earning over 10,000 total XP.',
+    icon_url: 'Immortal',
+    requirement_type: 'xp',
+    requirement_value: 10000,
+    created_at: new Date('2026-06-01').toISOString()
+  },
+  {
+    id: 'b9999999-9999-9999-9999-999999999999',
+    name: 'Radiant Legend',
+    description: 'Pinnacle CIST CodeQuest achievement. Earn over 15,000 total XP.',
+    icon_url: 'Radiant',
+    requirement_type: 'xp',
+    requirement_value: 15000,
     created_at: new Date('2026-06-01').toISOString()
   }
 ];
 
-export const INITIAL_STUDENT_BADGES = [
-  {
-    id: 'sb1',
-    student_id: 'd1111111-1111-1111-1111-111111111111',
-    badge_id: 'b1111111-1111-1111-1111-111111111111',
-    awarded_at: new Date('2026-06-10').toISOString()
-  },
-  {
-    id: 'sb2',
-    student_id: 'd1111111-1111-1111-1111-111111111111',
-    badge_id: 'b3333333-3333-3333-3333-333333333333',
-    awarded_at: new Date('2026-06-13').toISOString()
-  },
-  {
-    id: 'sb3',
-    student_id: 'd2222222-2222-2222-2222-222222222222',
-    badge_id: 'b1111111-1111-1111-1111-111111111111',
-    awarded_at: new Date('2026-06-05').toISOString()
-  },
-  {
-    id: 'sb4',
-    student_id: 'd2222222-2222-2222-2222-222222222222',
-    badge_id: 'b2222222-2222-2222-2222-222222222222',
-    awarded_at: new Date('2026-06-11').toISOString()
-  },
-  {
-    id: 'sb5',
-    student_id: 'd4444444-4444-4444-4444-444444444444',
-    badge_id: 'b1111111-1111-1111-1111-111111111111',
-    awarded_at: new Date('2026-06-12').toISOString()
-  },
-  {
-    id: 'sb6',
-    student_id: 'd4444444-4444-4444-4444-444444444444',
-    badge_id: 'b5555555-5555-5555-5555-555555555555',
-    awarded_at: new Date('2026-06-14').toISOString()
-  }
-];
+export const INITIAL_STUDENT_BADGES: any[] = [];
 
-export const INITIAL_PROJECTS = [
-  {
-    id: '71111111-1111-1111-1111-111111111111',
-    student_id: 'd1111111-1111-1111-1111-111111111111',
-    title: 'Tangier Tour Guide App',
-    description: 'An interactive Python script that suggests local landmarks (Cape Spartel, Hercules Caves) based on student inputs.',
-    category: 'Python',
-    image_url: 'https://images.unsplash.com/photo-1539650116574-8efeb43e2750?auto=format&fit=crop&w=400&q=80',
-    video_url: '',
-    project_url: '',
-    github_url: 'https://github.com/adam-cist/tangier-tour',
-    status: 'approved',
-    votes_count: 12,
-    teacher_score: 95,
-    xp_awarded: 200,
-    created_at: new Date('2026-06-10').toISOString()
-  },
-  {
-    id: '72222222-2222-2222-2222-722222222222',
-    student_id: 'd2222222-2222-2222-2222-222222222222',
-    title: 'Lego EV3 Robot Line Follower',
-    description: 'Program code designed for the CIST robotics lab sensors to enable visual track alignment and automated turning.',
-    category: 'Robotics',
-    image_url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=400&q=80',
-    video_url: '',
-    project_url: '',
-    github_url: '',
-    status: 'approved',
-    votes_count: 18,
-    teacher_score: 98,
-    xp_awarded: 250,
-    created_at: new Date('2026-06-11').toISOString()
-  },
-  {
-    id: '73333333-3333-3333-3333-733333333333',
-    student_id: 'd4444444-4444-4444-4444-444444444444',
-    title: 'School Lunch AI Predictor',
-    description: 'A neural network algorithm prototype analyzing past student lunch orders to minimize kitchen ingredient waste.',
-    category: 'AI',
-    image_url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=400&q=80',
-    video_url: '',
-    project_url: '',
-    github_url: 'https://github.com/yasmine-cist/lunch-ai',
-    status: 'approved',
-    votes_count: 22,
-    teacher_score: 99,
-    xp_awarded: 300,
-    created_at: new Date('2026-06-14').toISOString()
-  }
-];
+export const INITIAL_PROJECTS: any[] = [];
 
-export const INITIAL_COMMUNITY_POSTS = [
-  {
-    id: 'f1111111-1111-1111-1111-111111111111',
-    student_id: 'd1111111-1111-1111-1111-111111111111',
-    title: 'Stuck on Python indentations logic',
-    content: 'Hey guys, does anyone know why my Python for-loop is throwing an IndentationError? I put 4 spaces but it still highlights red.',
-    image_url: '',
-    type: 'question',
-    status: 'approved',
-    likes_count: 4,
-    comments_count: 2,
-    created_at: new Date('2026-06-10').toISOString()
-  },
-  {
-    id: 'f2222222-2222-2222-2222-222222222222',
-    student_id: 'd2222222-2222-2222-2222-222222222222',
-    title: 'Completed variables village quest!',
-    content: 'So happy I unlocked the Loop Master badge. On to the Loops Dungeon next. See you in the rankings!',
-    image_url: '',
-    type: 'achievement',
-    status: 'approved',
-    likes_count: 12,
-    comments_count: 0,
-    created_at: new Date('2026-06-12').toISOString()
-  },
-  {
-    id: 'f3333333-3333-3333-3333-333333333333',
-    student_id: 'd4444444-4444-4444-4444-444444444444',
-    title: 'Idea: CIST Game Jam during winter',
-    content: 'What if we ask Mr Harrison if we can organize a weekend school game jam using HTML/CSS? We can team up in groups.',
-    image_url: '',
-    type: 'idea',
-    status: 'approved',
-    likes_count: 16,
-    comments_count: 1,
-    created_at: new Date('2026-06-14').toISOString()
-  }
-];
+export const INITIAL_COMMUNITY_POSTS: any[] = [];
 
-export const INITIAL_COMMENTS = [
-  {
-    id: '81111111-1111-1111-1111-811111111111',
-    post_id: 'f1111111-1111-1111-1111-111111111111',
-    student_id: 'd2222222-2222-2222-2222-222222222222',
-    content: 'Check if you mixed tabs and spaces! Python does not allow both in the same file.',
-    status: 'approved',
-    created_at: new Date('2026-06-10T12:00:00Z').toISOString()
-  },
-  {
-    id: '82222222-2222-2222-2222-822222222222',
-    post_id: 'f1111111-1111-1111-1111-111111111111',
-    student_id: 'd4444444-4444-4444-4444-444444444444',
-    content: 'Agree with Sofia, try running the auto-formatter shortcut in the Code Lab.',
-    status: 'approved',
-    created_at: new Date('2026-06-10T13:30:00Z').toISOString()
-  },
-  {
-    id: '83333333-3333-3333-3333-833333333333',
-    post_id: 'f3333333-3333-3333-3333-333333333333',
-    student_id: 'd1111111-1111-1111-1111-111111111111',
-    content: 'Count me in for this! I can do the design assets.',
-    status: 'approved',
-    created_at: new Date('2026-06-14T18:00:00Z').toISOString()
-  }
-];
+export const INITIAL_COMMENTS: any[] = [];
 
-export const INITIAL_LEADERBOARD_REQUESTS = [
-  {
-    id: 'lr1',
-    student_id: 'd1111111-1111-1111-1111-111111111111',
-    status: 'approved',
-    message: 'I want to compete in the main CIST rankings.',
-    created_at: new Date('2026-06-12').toISOString(),
-    reviewed_at: new Date('2026-06-12').toISOString()
-  },
-  {
-    id: 'lr2',
-    student_id: 'd2222222-2222-2222-2222-222222222222',
-    status: 'approved',
-    message: 'Active student ready to code!',
-    created_at: new Date('2026-06-13').toISOString(),
-    reviewed_at: new Date('2026-06-13').toISOString()
-  },
-  {
-    id: 'lr3',
-    student_id: 'd4444444-4444-4444-4444-444444444444',
-    status: 'approved',
-    message: 'Show my AI projects to the community.',
-    created_at: new Date('2026-06-13').toISOString(),
-    reviewed_at: new Date('2026-06-13').toISOString()
-  },
-  {
-    id: 'lr4',
-    student_id: 'd5555555-5555-5555-5555-555555555555',
-    status: 'pending',
-    message: 'Hope to join Sofia on the top spots.',
-    created_at: new Date('2026-06-14').toISOString(),
-    reviewed_at: null
-  }
-];
+export const INITIAL_LEADERBOARD_REQUESTS: any[] = [];
 
-export const INITIAL_PROGRESS = [
-  {
-    id: 'pgr1',
-    student_id: 'd1111111-1111-1111-1111-111111111111',
-    mission_id: 'e1111111-1111-1111-1111-111111111111',
-    lesson_id: '91111111-1111-1111-1111-111111111111',
-    challenge_id: null,
-    status: 'completed',
-    score: 100,
-    time_spent: 320,
-    attempts_count: 1,
-    completed_at: new Date('2026-06-10').toISOString(),
-    created_at: new Date('2026-06-10').toISOString()
-  },
-  {
-    id: 'pgr2',
-    student_id: 'd1111111-1111-1111-1111-111111111111',
-    mission_id: 'e1111111-1111-1111-1111-111111111111',
-    lesson_id: '91111112-1111-1111-1111-111111111112',
-    challenge_id: null,
-    status: 'completed',
-    score: 100,
-    time_spent: 180,
-    attempts_count: 1,
-    completed_at: new Date('2026-06-11').toISOString(),
-    created_at: new Date('2026-06-10').toISOString()
-  },
-  {
-    id: 'pgr3',
-    student_id: 'd1111111-1111-1111-1111-111111111111',
-    mission_id: 'e1111111-1111-1111-1111-111111111111',
-    lesson_id: null,
-    challenge_id: 'c1111111-1111-1111-1111-111111111111',
-    status: 'completed',
-    score: 100,
-    time_spent: 450,
-    attempts_count: 2,
-    completed_at: new Date('2026-06-12').toISOString(),
-    created_at: new Date('2026-06-10').toISOString()
-  }
-];
+export const INITIAL_PROGRESS: any[] = [];
 
-export const INITIAL_NOTIFICATIONS = [
-  {
-    id: 'n1',
-    user_id: '01111111-1111-1111-1111-111111111111',
-    title: 'Welcome to CIST CodeQuest!',
-    message: 'Start learning Python and Algorithms to earn your first badges.',
-    type: 'system',
-    is_read: false,
-    created_at: new Date('2026-06-14').toISOString()
-  },
-  {
-    id: 'n2',
-    user_id: '01111111-1111-1111-1111-111111111111',
-    title: 'Badge Awarded!',
-    message: 'You have been awarded the Python Starter badge.',
-    type: 'badge',
-    is_read: false,
-    created_at: new Date('2026-06-15').toISOString()
-  }
-];
+export const INITIAL_NOTIFICATIONS: any[] = [];
 
 export const INITIAL_COURSES = [
   {

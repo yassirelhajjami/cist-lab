@@ -25,8 +25,8 @@ export default function AdminOverview() {
     pendingPosts: 0,
     pendingLeaderboards: 0,
     totalXp: 0,
-    topStudent: 'Adam Belghiti',
-    topProject: 'School Lunch AI Predictor'
+    topStudent: '',
+    topProject: ''
   });
   const [chartData, setChartData] = useState<any[]>([]);
   const [completionData, setCompletionData] = useState<any[]>([]);
@@ -52,11 +52,11 @@ export default function AdminOverview() {
 
         // Sort to find top student
         const sortedStudents = [...students].sort((a: any, b: any) => b.xp - a.xp);
-        const topStudentName = sortedStudents[0] ? sortedStudents[0].full_name : 'Adam Belghiti';
+        const topStudentName = sortedStudents[0] ? sortedStudents[0].full_name : '';
 
         // Sort to find top project
         const sortedProjects = [...projects].filter(p => p.status === 'approved').sort((a: any, b: any) => b.votes_count - a.votes_count);
-        const topProjectTitle = sortedProjects[0] ? sortedProjects[0].title : 'School Lunch AI Predictor';
+        const topProjectTitle = sortedProjects[0] ? sortedProjects[0].title : '';
 
         setStats({
           totalStudents: students.length,
@@ -77,14 +77,8 @@ export default function AdminOverview() {
         }));
         setChartData(formattedChart);
 
-        // Completed paths charts mock data
-        setCompletionData([
-          { name: 'Python Basics', completed: 4 },
-          { name: 'Variables Village', completed: 3 },
-          { name: 'Loops Dungeon', completed: 2 },
-          { name: 'Robot Solver', completed: 1 },
-          { name: 'AI Explorer', completed: 0 }
-        ]);
+        // Completed paths — populated from real student progress (empty until students are added)
+        setCompletionData([]);
 
       } catch (err) {
         console.error(err);
@@ -167,10 +161,10 @@ export default function AdminOverview() {
           </div>
           <div className="mt-2 text-xs space-y-1 text-slate-700">
             <p className="font-semibold truncate">
-              🌟 Top: <span className="font-extrabold text-slate-900">{stats.topStudent}</span>
+              🌟 Top: <span className="font-extrabold text-slate-900">{stats.topStudent || '—'}</span>
             </p>
             <p className="font-semibold truncate">
-              🏆 Showcase: <span className="font-extrabold text-slate-900">{stats.topProject}</span>
+              🏆 Showcase: <span className="font-extrabold text-slate-900">{stats.topProject || '—'}</span>
             </p>
           </div>
         </div>

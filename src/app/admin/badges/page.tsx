@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { dbService } from '@/lib/db';
 import { Award, PlusCircle, AlertCircle } from 'lucide-react';
+import { BadgeIcon } from '@/components/ui/BadgeIcon';
 
 export default function AdminBadgesManagement() {
   const [badges, setBadges] = useState<any[]>([]);
@@ -100,8 +101,8 @@ export default function AdminBadgesManagement() {
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {badges.map((b) => (
           <div key={b.id} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex items-start space-x-4">
-            <div className="h-12 w-12 rounded-lg bg-gold-accent/15 border border-gold-accent/20 flex items-center justify-center text-2xl shrink-0">
-              {b.icon_url}
+            <div className="h-12 w-12 rounded-lg bg-gold-accent/15 border border-gold-accent/20 flex items-center justify-center shrink-0">
+              <BadgeIcon name={b.icon_url} className="h-6 w-6 text-gold-accent" />
             </div>
             <div className="space-y-1">
               <h3 className="text-sm font-black text-slate-850 uppercase">{b.name}</h3>

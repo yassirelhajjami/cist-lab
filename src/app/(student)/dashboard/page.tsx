@@ -1,26 +1,15 @@
-// src/app/(student)/dashboard/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useApp } from '@/context/AppContext';
-import { dbService, XP_LEVELS } from '@/lib/db';
-import { getXpProgress } from '@/components/layout/Navbar';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useApp } from '@/context/AppContext';
+import { dbService } from '@/lib/db';
+import type { Course, Mission, StudentProgress } from '@/types';
+import { getXpProgress } from '@/components/layout/Navbar';
 import {
-  Flame,
-  Coins,
-  Trophy,
-  Award,
-  BookOpen,
-  ArrowRight,
-  Sparkles,
-  Camera,
-  CheckCircle2,
-  BellRing,
-  Zap,
-  FolderHeart,
-  Bell
+  ArrowRight, Camera, CheckCircle2, Compass, X
 } from 'lucide-react';
+import { GameIcon, GameIconName } from '@/components/ui/GameIcon';
 
 const AVATAR_TEMPLATES = [
   'https://api.dicebear.com/7.x/pixel-art/svg?seed=adam',
@@ -33,48 +22,44 @@ const AVATAR_TEMPLATES = [
   'https://api.dicebear.com/7.x/pixel-art/svg?seed=Leo'
 ];
 
+const quickAdventures = [
+  { href: '/scratch', title: 'Block Jungle', note: 'Create with colorful blocks', icon: 'palette' as GameIconName, color: 'bg-violet-100 border-violet-200' },
+  { href: '/games', title: 'Puzzle Temple', note: 'Train your logic powers', icon: 'condition' as GameIconName, color: 'bg-amber-100 border-amber-200' },
+  { href: '/code-lab', title: 'Code Workshop', note: 'Build something amazing', icon: 'monitor' as GameIconName, color: 'bg-sky-100 border-sky-200' },
+];
+
 export default function StudentDashboard() {
   const { profile, student, notifications, refreshUser, loginStreak } = useApp();
-  const [activeMission, setActiveMission] = useState<any>(null);
+  const [activeMission, setActiveMission] = useState<Mission | null>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [badgesCount, setBadgesCount] = useState(0);
   const [leaderboardPos, setLeaderboardPos] = useState<number | string>('-');
 
   useEffect(() => {
     async function loadDashboardData() {
-      if (profile && student) {
-        // Load missions and courses, then find next incomplete mission for student's grade
-        const [allMissions, courses] = await Promise.all([
-          dbService.getMissions(),
-          dbService.getCourses()
-        ]);
-        const progress = await dbService.getStudentProgress(student.id);
-        const completedMissionIds = progress
-          .filter((p: any) => !p.lesson_id && !p.challenge_id && p.status === 'completed')
-          .map((p: any) => p.mission_id);
-        
-        const studentCourses = courses.filter((c: any) => c.grade === student.grade);
-        const gradeMissions = allMissions.filter((m: any) => studentCourses.some((sc: any) => sc.id === m.course_id));
-
-        const nextMission = gradeMissions.find((m: any) => !completedMissionIds.includes(m.id) && m.is_published) || gradeMissions[0] || null;
-        setActiveMission(nextMission);
-
-        // Load badges count
-        const earnedBadges = await dbService.getStudentBadges(student.id);
-        setBadgesCount(earnedBadges.length);
-
-        // Find leaderboard position
-        const board = await dbService.getLeaderboard();
-        const pos = board.findIndex((item: any) => item.id === student.id);
-        setLeaderboardPos(pos !== -1 ? pos + 1 : 'Not Joined');
-      }
+      if (!profile || !student) return;
+      const [allMissions, courses, progress, earnedBadges, board] = await Promise.all([
+        dbService.getMissions(), dbService.getCourses(), dbService.getStudentProgress(student.id),
+        dbService.getStudentBadges(student.id), dbService.getLeaderboard()
+      ]);
+      const completedMissionIds = progress
+        .filter((item: StudentProgress) => !item.lesson_id && !item.challenge_id && item.status === 'completed')
+        .map((item: StudentProgress) => item.mission_id);
+      const courseIds = courses.filter((course: Course) => course.grade === student.grade).map((course: Course) => course.id);
+      const gradeMissions = allMissions.filter((mission: Mission) => courseIds.includes(mission.course_id || '') && mission.is_published);
+      setActiveMission(gradeMissions.find((mission: Mission) => !completedMissionIds.includes(mission.id)) || gradeMissions[0] || null);
+      setBadgesCount(earnedBadges.length);
+      const position = board.findIndex((item: { id: string }) => item.id === student.id);
+      setLeaderboardPos(position >= 0 ? position + 1 : '—');
     }
-    loadDashboardData();
+    loadDashboardData().catch(console.error);
   }, [profile, student]);
 
   if (!profile || !student) return null;
 
   const xpInfo = getXpProgress(profile.xp);
+  const firstName = profile.full_name.split(' ')[0];
+  const unreadCount = notifications.filter((item) => !item.is_read).length;
 
   const handleSelectAvatar = async (url: string) => {
     await dbService.updateStudent(profile.id, { avatar_url: url }, {});
@@ -83,257 +68,90 @@ export default function StudentDashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Banner Card */}
-      <div className="relative overflow-hidden rounded-2xl bg-navy-deep p-6 text-white shadow-lg border border-navy-light/30">
-        {/* Background Gradients */}
-        <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-maple-red/20 blur-2xl"></div>
-        <div className="absolute -left-10 -bottom-10 h-36 w-36 rounded-full bg-gold-accent/10 blur-2xl"></div>
-
-        <div className="relative flex flex-col md:flex-row items-center justify-between gap-6 z-10">
-          <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-5 text-center md:text-left">
-            {/* Interactive Avatar */}
-            <div className="relative group cursor-pointer" onClick={() => setAvatarOpen(true)}>
-              <img
-                src={profile.avatar_url || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=adam'}
-                alt={profile.full_name}
-                className="h-24 w-24 rounded-2xl border-4 border-gold-accent bg-white shadow-xl hover:scale-105 transition duration-200"
-              />
-              <div className="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition duration-200">
-                <Camera className="h-6 w-6 text-white" />
+    <div className="space-y-7 pb-10">
+      <section className="relative overflow-hidden rounded-[2rem] border-2 border-emerald-900/10 bg-gradient-to-br from-emerald-700 via-teal-700 to-sky-700 p-6 md:p-8 text-white shadow-xl">
+        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-yellow-300/20" />
+        <div className="absolute right-12 bottom-[-6rem] h-48 w-48 rounded-full border-[28px] border-white/5" />
+        <div className="absolute left-1/2 top-5 text-5xl opacity-15 rotate-12">{'</>'}</div>
+        <div className="relative z-10 grid items-center gap-6 lg:grid-cols-[1fr_auto]">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <button onClick={() => setAvatarOpen(true)} className="group relative mx-auto shrink-0 sm:mx-0" aria-label="Change your explorer avatar">
+              <div className="rounded-[1.7rem] bg-yellow-300 p-1.5 shadow-xl rotate-[-2deg] transition group-hover:rotate-2 group-hover:scale-105">
+                <img src={profile.avatar_url || AVATAR_TEMPLATES[0]} alt="Your explorer avatar" className="h-24 w-24 rounded-[1.3rem] bg-white object-cover" />
               </div>
-            </div>
-            
-            <div>
-              <div className="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-3 justify-center md:justify-start">
-                <h2 className="text-2xl font-black uppercase text-white">
-                  Welcome back, <span className="text-gold-accent">{profile.full_name.split(' ')[0]}</span>!
-                </h2>
-                <span className="bg-maple-red/30 border border-maple-red/40 px-2.5 py-0.5 rounded text-[10px] uppercase font-black text-maple-light tracking-wider">
-                  {profile.rank_title}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-gray-300">
-                {activeMission 
-                  ? `Ready to code? Continue your "${activeMission.title}" mission path and unlock ${activeMission.xp_reward} XP!`
-                  : "You've conquered all active school coding pathways! Check out the showcase or code lab."
-                }
-              </p>
-            </div>
-          </div>
-
-          <div className="hidden lg:flex items-center space-x-2 text-gold-accent text-xs font-black uppercase tracking-wider bg-navy-medium/40 border border-navy-light/30 rounded-xl px-4 py-3 shadow-inner">
-            <Flame className="h-5 w-5 fill-current text-orange-500 animate-bounce" />
-            <span>Daily Streak: {loginStreak} Day{loginStreak !== 1 ? 's' : ''}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Grid statistics metrics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* STAT 1: LEVEL */}
-        <div className="rounded-xl border border-navy-light/20 bg-white p-5 shadow-sm flex items-center space-x-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold-accent/15 text-gold-accent">
-            <Trophy className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Current Level</span>
-            <span className="text-2xl font-black text-slate-900 leading-none">Level {profile.level}</span>
-            <span className="block text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tight">
-              Rank: {profile.rank_title}
-            </span>
-          </div>
-        </div>
-
-        {/* STAT 2: COINS */}
-        <div className="rounded-xl border border-navy-light/20 bg-white p-5 shadow-sm flex items-center space-x-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-500/15 text-yellow-600">
-            <Coins className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Coins Balance</span>
-            <span className="text-2xl font-black text-slate-900 leading-none">{profile.coins} Coins</span>
-            <span className="block text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tight">
-              Spendable in rewards store
-            </span>
-          </div>
-        </div>
-
-        {/* STAT 3: LEADERBOARD POSITION */}
-        <div className="rounded-xl border border-navy-light/20 bg-white p-5 shadow-sm flex items-center space-x-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-maple-red/15 text-maple-red">
-            <Flame className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Leaderboard</span>
-            <span className="text-2xl font-black text-slate-900 leading-none">Rank #{leaderboardPos}</span>
-            <span className="block text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tight">
-              Top XP rankings
-            </span>
-          </div>
-        </div>
-
-        {/* STAT 4: BADGES */}
-        <div className="rounded-xl border border-navy-light/20 bg-white p-5 shadow-sm flex items-center space-x-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/15 text-blue-600">
-            <Award className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Badges Earned</span>
-            <span className="text-2xl font-black text-slate-900 leading-none">{badgesCount} Achievements</span>
-            <span className="block text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tight">
-              Unlocked via skill quests
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main content grid split */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left Column: Active Quest Path Resume */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-xl border border-navy-light/20 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-              <h3 className="font-black uppercase text-sm text-slate-800 flex items-center space-x-2">
-                <BookOpen className="h-4.5 w-4.5 text-navy-deep" />
-                <span>Next Quest Module</span>
-              </h3>
-              <Link href="/missions" className="text-xs text-navy-medium hover:text-maple-red font-bold flex items-center space-x-1">
-                <span>All Paths</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-
-            {activeMission ? (
-              <div className="rounded-xl border border-slate-200 p-5 bg-slate-50/50 hover:border-navy-light/30 transition duration-200">
-                <div className="flex items-start justify-between flex-wrap gap-4">
-                  <div>
-                    <span className="bg-navy-deep text-white px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-wide">
-                      {activeMission.category}
-                    </span>
-                    <h4 className="mt-2 text-lg font-extrabold text-slate-900">{activeMission.title}</h4>
-                    <p className="mt-1 text-sm text-slate-500 max-w-lg leading-snug">{activeMission.description}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="block text-xs font-bold text-slate-400 uppercase">Rewards</span>
-                    <span className="inline-flex items-center text-xs font-bold text-slate-700 bg-white border border-slate-200 px-2 py-1.5 rounded-full mt-1 gap-1">
-                      <Zap className="h-3 w-3 text-amber-500 fill-current" />
-                      <span>{activeMission.xp_reward} XP</span>
-                    </span>
-                    <span className="inline-flex items-center text-xs font-bold text-yellow-600 bg-white border border-slate-200 px-2 py-1.5 rounded-full mt-1 ml-2 gap-1">
-                      <Coins className="h-3 w-3 text-yellow-500 fill-current" />
-                      <span>{activeMission.coin_reward} Coins</span>
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex items-center justify-between border-t border-slate-200/60 pt-4">
-                  <div className="flex items-center space-x-2 text-xs font-bold text-slate-500">
-                    <span>Difficulty:</span>
-                    <span className={`uppercase text-[10px] font-black px-1.5 py-0.5 rounded ${
-                      activeMission.difficulty === 'beginner' ? 'bg-emerald-100 text-emerald-700' :
-                      activeMission.difficulty === 'intermediate' ? 'bg-amber-100 text-amber-700' :
-                      'bg-rose-100 text-rose-700'
-                    }`}>
-                      {activeMission.difficulty}
-                    </span>
-                  </div>
-                  <Link
-                    href={`/missions/${activeMission.id}`}
-                    className="flex items-center space-x-2 rounded-lg bg-navy-deep hover:bg-maple-red px-5 py-2 text-xs font-bold text-white transition duration-200 shadow"
-                  >
-                    <span>Resume Quest</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-sm text-slate-400">
-                All class missions completed! You are a CIST CodeQuest Hero.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Notification log history */}
-        <div className="space-y-6">
-          <div className="rounded-xl border border-navy-light/20 bg-white p-6 shadow-sm">
-            <h3 className="font-black uppercase text-sm text-slate-800 flex items-center space-x-2 mb-4 border-b border-slate-100 pb-3">
-              <BellRing className="h-4.5 w-4.5 text-navy-deep" />
-              <span>Quest Logs & Alerts</span>
-            </h3>
-
-            <div className="space-y-3.5 max-h-80 overflow-y-auto pr-1">
-              {notifications.length === 0 ? (
-                <div className="text-center py-8 text-xs text-slate-400">
-                  No notifications yet. Try completing lessons!
-                </div>
-              ) : (
-                notifications.slice(0, 5).map((n: any) => (
-                  <div
-                    key={n.id}
-                    className={`p-3 rounded-lg border border-slate-150 text-xs flex items-start space-x-3 hover:bg-slate-50 transition ${
-                      !n.is_read ? 'bg-navy-light/5 border-navy-light/20' : ''
-                    }`}
-                  >
-                    <div className="mt-0.5 shrink-0">
-                      {n.type === 'badge' ? (
-                        <Award className="h-4.5 w-4.5 text-gold-accent" />
-                      ) : n.type === 'xp' ? (
-                        <Zap className="h-4.5 w-4.5 text-amber-500 fill-current" />
-                      ) : n.type === 'project' ? (
-                        <FolderHeart className="h-4.5 w-4.5 text-purple-500" />
-                      ) : (
-                        <Bell className="h-4.5 w-4.5 text-slate-400" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-800">{n.title}</p>
-                      <p className="text-slate-500 mt-0.5 leading-snug">{n.message}</p>
-                      <span className="text-[9px] text-slate-400 mt-1 block">
-                        {new Date(n.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* AVATAR PICKER MODAL POPUP */}
-      {avatarOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-slate-200">
-            <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-2">
-              Select Character Avatar
-            </h3>
-            <p className="text-xs text-slate-500 mb-6">
-              Pick a pixel art template to represent you inside the platform leaderboard.
-            </p>
-
-            <div className="grid grid-cols-4 gap-4">
-              {AVATAR_TEMPLATES.map((url, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSelectAvatar(url)}
-                  className="rounded-xl border border-slate-200 bg-slate-50 p-2 hover:border-gold-accent hover:bg-gold-accent/5 transition"
-                >
-                  <img src={url} alt={`avatar-${idx}`} className="h-16 w-16 mx-auto object-contain bg-white rounded-lg border border-slate-100" />
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setAvatarOpen(false)}
-              className="mt-6 w-full rounded-lg bg-slate-100 hover:bg-slate-200 py-2.5 text-xs font-bold text-slate-700 transition"
-            >
-              Cancel
+              <span className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl border-2 border-white bg-sky-500 shadow-lg"><Camera className="h-4 w-4" /></span>
             </button>
+            <div className="text-center sm:text-left">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-yellow-200"><Compass className="h-3.5 w-3.5" /> Explorer basecamp</span>
+              <h2 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">Ready for an adventure, {firstName}?</h2>
+              <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-emerald-50/85">Your next coding quest is waiting. Solve puzzles, collect stars, and build your way to the top!</p>
+            </div>
+          </div>
+          <div className="mx-auto flex gap-2 lg:mx-0">
+            <div className="rounded-2xl border border-white/15 bg-black/10 px-4 py-3 text-center"><GameIcon name="xp" className="mx-auto h-9 w-9" /><b className="mt-1 block text-lg">{loginStreak}</b><span className="text-[9px] font-black uppercase tracking-wider text-white/65">day streak</span></div>
+            <div className="rounded-2xl border border-white/15 bg-black/10 px-4 py-3 text-center"><GameIcon name="trophy" className="mx-auto h-9 w-9" /><b className="mt-1 block text-lg">{profile.level}</b><span className="text-[9px] font-black uppercase tracking-wider text-white/65">level</span></div>
           </div>
         </div>
-      )}
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Adventure level', value: `Level ${profile.level}`, note: profile.rank_title, icon: 'trophy' as GameIconName, style: 'bg-yellow-100' },
+          { label: 'Treasure coins', value: profile.coins.toLocaleString(), note: 'Spend on cool rewards', icon: 'coin' as GameIconName, style: 'bg-orange-100' },
+          { label: 'Explorer rank', value: `#${leaderboardPos}`, note: 'On the school leaderboard', icon: 'crown' as GameIconName, style: 'bg-rose-100' },
+          { label: 'Badges found', value: badgesCount.toString(), note: 'Keep collecting!', icon: 'gem' as GameIconName, style: 'bg-violet-100' }
+        ].map(({ label, value, note, icon, style }) => (
+          <article key={label} className="quest-card quest-card-hover flex items-center gap-4 p-4.5">
+            <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${style}`}><GameIcon name={icon} className="h-14 w-14 drop-shadow-md" /></div>
+            <div><span className="quest-kicker">{label}</span><strong className="mt-0.5 block text-2xl font-black text-slate-900">{value}</strong><span className="text-[11px] font-semibold text-slate-500">{note}</span></div>
+          </article>
+        ))}
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
+        <article className="quest-card overflow-hidden">
+          <div className="flex items-center justify-between border-b-2 border-emerald-50 px-5 py-4 md:px-6">
+            <div><span className="quest-kicker">Continue your journey</span><h3 className="text-xl font-black text-slate-900">Your next quest</h3></div>
+            <Link href="/missions" className="flex items-center gap-1 text-xs font-black text-emerald-700 hover:text-emerald-900">Quest map <ArrowRight className="h-4 w-4" /></Link>
+          </div>
+          {activeMission ? (
+            <div className="p-5 md:p-6">
+              <div className="rounded-[1.5rem] border-2 border-sky-100 bg-gradient-to-br from-sky-50 to-emerald-50 p-5 md:p-6">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap gap-2"><span className="rounded-full bg-emerald-700 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">{activeMission.category}</span><span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-[10px] font-black uppercase text-emerald-700">{activeMission.difficulty}</span></div>
+                    <h4 className="mt-4 text-2xl font-black text-slate-900">{activeMission.title}</h4>
+                    <p className="mt-2 max-w-xl text-sm font-medium leading-relaxed text-slate-600">{activeMission.description}</p>
+                  </div>
+                  <div className="flex shrink-0 gap-2"><span className="flex items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-black text-amber-600 shadow-sm"><GameIcon name="xp" className="h-5 w-5" /> {activeMission.xp_reward} XP</span><span className="flex items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-black text-orange-600 shadow-sm"><GameIcon name="coin" className="h-5 w-5" /> {activeMission.coin_reward}</span></div>
+                </div>
+                <div className="mt-6 flex flex-col gap-4 border-t-2 border-white/80 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-800"><CheckCircle2 className="h-5 w-5" /> Complete activities to unlock rewards</div>
+                  <Link href={`/missions/${activeMission.id}`} className="quest-button flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg">Start quest <ArrowRight className="h-4 w-4" /></Link>
+                </div>
+              </div>
+              <div className="mt-5 flex items-center gap-4"><div className="quest-progress h-4 flex-1"><div className="h-full" style={{ width: `${xpInfo.percentage}%` }} /></div><span className="text-xs font-black text-emerald-800">{xpInfo.percentage}% to level {profile.level + 1}</span></div>
+            </div>
+          ) : <div className="p-12 text-center"><GameIcon name="trophy" className="mx-auto h-20 w-20" /><h4 className="mt-3 text-xl font-black">All quests conquered!</h4><p className="mt-1 text-sm text-slate-500">Visit the workshop and create something new.</p></div>}
+        </article>
+
+        <article className="quest-card p-5 md:p-6">
+          <div className="flex items-start justify-between"><div><span className="quest-kicker">Pick a side adventure</span><h3 className="text-xl font-black text-slate-900">Explore & play</h3></div><GameIcon name="flag" className="h-11 w-11" /></div>
+          <div className="mt-5 space-y-3">
+            {quickAdventures.map(({ href, title, note, icon, color }) => <Link key={href} href={href} className="group flex items-center gap-3 rounded-2xl border-2 border-slate-100 bg-slate-50/70 p-3 transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-white"><span className={`flex h-12 w-12 items-center justify-center rounded-xl border ${color}`}><GameIcon name={icon} className="h-10 w-10" /></span><span className="min-w-0 flex-1"><b className="block text-sm font-black text-slate-800">{title}</b><span className="text-[11px] font-semibold text-slate-500">{note}</span></span><ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-emerald-600" /></Link>)}
+          </div>
+          <div className="mt-5 flex items-center gap-2 rounded-2xl bg-amber-50 p-4 text-xs font-semibold leading-relaxed text-amber-900"><GameIcon name="sparkle" className="h-7 w-7 shrink-0" />Try one small challenge every day to keep your streak alive.</div>
+        </article>
+      </section>
+
+      <section className="quest-card p-5 md:p-6">
+        <div className="flex items-center justify-between"><div><span className="quest-kicker">Messages from your world</span><h3 className="text-xl font-black text-slate-900">Latest quest news</h3></div>{unreadCount > 0 && <span className="rounded-full bg-rose-100 px-3 py-1 text-[10px] font-black text-rose-700">{unreadCount} NEW</span>}</div>
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          {notifications.length === 0 ? <div className="col-span-full rounded-2xl bg-slate-50 py-8 text-center text-sm font-semibold text-slate-400">Your adventure log is quiet—for now!</div> : notifications.slice(0, 3).map((notification) => <div key={notification.id} className="rounded-2xl border-2 border-slate-100 bg-slate-50/70 p-4"><GameIcon name="bell" className="h-9 w-9" /><b className="mt-3 block text-sm text-slate-800">{notification.title}</b><p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{notification.message}</p></div>)}
+        </div>
+      </section>
+
+      {avatarOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="avatar-title"><div className="quest-card w-full max-w-lg p-6"><div className="flex items-start justify-between"><div><span className="quest-kicker">Choose your hero</span><h3 id="avatar-title" className="text-2xl font-black text-slate-900">Explorer avatars</h3></div><button onClick={() => setAvatarOpen(false)} className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200" aria-label="Close avatar picker"><X className="h-5 w-5" /></button></div><div className="mt-6 grid grid-cols-4 gap-3">{AVATAR_TEMPLATES.map((url, index) => <button key={url} onClick={() => handleSelectAvatar(url)} className="rounded-2xl border-2 border-slate-100 bg-slate-50 p-2 transition hover:-translate-y-1 hover:border-emerald-400"><img src={url} alt={`Explorer avatar ${index + 1}`} className="aspect-square w-full rounded-xl bg-white" /></button>)}</div></div></div>}
     </div>
   );
 }
