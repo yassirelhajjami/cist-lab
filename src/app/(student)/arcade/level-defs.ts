@@ -72,7 +72,7 @@ export function getLevelsForGrade(grade: number): LevelDef[] {
     // Default configuration values
     let name = `Level ${grade}-${levelNum}`;
     let instructions = "Grab the bananas and open the chest!";
-    let mapLength = 12;
+    const mapLength = 12;
     let startPos = 2;
     let bananaPos: number[] = [];
     let chestPos = 8;

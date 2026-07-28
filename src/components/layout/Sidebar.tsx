@@ -78,6 +78,7 @@ export default function Sidebar() {
         key={link.href}
         href={link.href}
         onClick={() => setMobileOpen(false)}
+        aria-current={isActive ? 'page' : undefined}
         className={`group flex items-center space-x-3 rounded-2xl px-3.5 py-2.5 text-sm font-extrabold transition-all duration-200 ${
           isActive
             ? 'bg-white text-emerald-900 shadow-lg shadow-emerald-950/15 border-b-4 border-emerald-300'
@@ -117,6 +118,9 @@ export default function Sidebar() {
         </span>
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-navigation"
           className="rounded-lg p-1 text-gray-300 hover:text-white"
         >
           {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -147,14 +151,15 @@ export default function Sidebar() {
 
       {/* Mobile Drawer Slide-out overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden bg-navy-dark/80 backdrop-blur-sm">
-          <div className="w-64 bg-navy-deep text-white shadow-2xl flex flex-col h-full animate-slide-in">
+        <div className="fixed inset-0 z-50 flex bg-navy-dark/80 backdrop-blur-sm lg:hidden" role="presentation">
+          <div id="mobile-navigation" role="dialog" aria-modal="true" aria-label="Main navigation" className="flex h-full w-72 max-w-[86vw] flex-col bg-navy-deep text-white shadow-2xl animate-slide-in">
             <div className="flex h-16 items-center justify-between px-4 border-b border-navy-light/20 bg-navy-dark">
               <span className="text-sm font-black uppercase tracking-widest text-gold-accent">
                 Menu Path
               </span>
               <button
                 onClick={() => setMobileOpen(false)}
+                aria-label="Close navigation menu"
                 className="p-1 rounded-lg hover:bg-navy-medium"
               >
                 <X className="h-5 w-5" />
@@ -165,7 +170,7 @@ export default function Sidebar() {
             </div>
             {bottomNav}
           </div>
-          <div className="flex-grow" onClick={() => setMobileOpen(false)}></div>
+          <button className="flex-grow cursor-default" onClick={() => setMobileOpen(false)} aria-label="Close navigation menu" />
         </div>
       )}
     </>

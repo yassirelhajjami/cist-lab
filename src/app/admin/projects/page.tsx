@@ -28,7 +28,8 @@ export default function AdminProjectsModeration() {
   }
 
   useEffect(() => {
-    loadProjects();
+    const timer = window.setTimeout(() => void loadProjects(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleModerate = async (projectId: string, status: 'approved' | 'rejected') => {

@@ -23,7 +23,8 @@ export default function AdminLeaderboardRequests() {
   }
 
   useEffect(() => {
-    loadRequests();
+    const timer = window.setTimeout(() => void loadRequests(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleModerate = async (requestId: string, status: 'approved' | 'rejected') => {

@@ -22,12 +22,16 @@ function extractOutputText(data: unknown): string {
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return Response.json({ error: 'AI chat is not configured.' }, { status: 503 });
-  }
-
   try {
+    const supabase = createClient(await cookies());
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return unauthenticatedResponse(user, 'Sign in to use the AI tutor.')!;
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return Response.json({ error: 'AI chat is not configured.' }, { status: 503 });
+    }
+
     const body = await request.json() as { messages?: ChatMessage[] };
     const messages = Array.isArray(body.messages)
       ? body.messages
@@ -81,3 +85,6 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Unable to process the chat request.' }, { status: 500 });
   }
 }
+import { cookies } from 'next/headers';
+import { createClient } from '@/utils/supabase/server';
+import { unauthenticatedResponse } from '@/lib/server/api-auth';

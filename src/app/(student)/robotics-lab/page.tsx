@@ -53,7 +53,7 @@ export default function RoboticsLabPage() {
     setIsPlaying(true);
     setLogs(prev => [...prev, '> Starting robotics firmware execution...']);
 
-    let current = { x: 0, y: 0, led: false };
+    const current = { x: 0, y: 0, led: false };
     let step = 0;
 
     const interval = setInterval(() => {

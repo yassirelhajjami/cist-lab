@@ -43,7 +43,8 @@ export default function AdminLessonsManagement() {
   }
 
   useEffect(() => {
-    loadInitialData();
+    const timer = window.setTimeout(() => void loadInitialData(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   async function loadLessons() {
@@ -60,7 +61,8 @@ export default function AdminLessonsManagement() {
   }
 
   useEffect(() => {
-    loadLessons();
+    const timer = window.setTimeout(() => void loadLessons(), 0);
+    return () => window.clearTimeout(timer);
   }, [selectedMissionId]);
 
   const handleSubmit = async (e: React.FormEvent) => {

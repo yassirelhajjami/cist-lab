@@ -31,7 +31,8 @@ export default function AdminBadgesManagement() {
   }
 
   useEffect(() => {
-    loadBadges();
+    const timer = window.setTimeout(() => void loadBadges(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -39,6 +39,12 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
 next-env.d.ts
 
 # agents and skills
@@ -48,3 +54,5 @@ next-env.d.ts
 # temporary clone folder
 /cist-lab/
 
+# local logs and temporary build output
+/.tmp/

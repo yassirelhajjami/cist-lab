@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "lint:ratchet": "node scripts/check-lint-baseline.mjs",
+    "test": "npm run test:security",
+    "test:security": "node --experimental-strip-types --test tests/security/*.test.mjs",
+    "test:database": "supabase test db"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

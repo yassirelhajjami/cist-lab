@@ -220,7 +220,7 @@ export default function CodeLabPage() {
         const merged = { ...scope, ...localScope, ...builtins };
         const keys = Object.keys(merged);
         const vals = keys.map(k => merged[k]);
-        // eslint-disable-next-line no-new-func
+
         return new Function(...keys, `return (${js});`)(...vals);
       } catch {
         throw new Error(`SyntaxError: cannot evaluate: ${expr}`);
@@ -410,7 +410,7 @@ export default function CodeLabPage() {
   const runJavaScript = (src: string): string[] => {
     const out: string[] = [];
     try {
-      // eslint-disable-next-line no-new-func
+
       new Function('console', src)({
         log: (...a: any[]) => out.push(a.map(String).join(' ')),
         error: (...a: any[]) => out.push('Error: ' + a.join(' ')),

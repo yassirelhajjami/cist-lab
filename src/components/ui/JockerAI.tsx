@@ -3,11 +3,28 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { MessageCircle, X, Send, Sparkles, HelpCircle, Flame, ShieldAlert } from 'lucide-react';
+import Image from 'next/image';
+import { X, Send, Sparkles } from 'lucide-react';
 
 interface Message {
   sender: 'jocker' | 'student';
   text: string;
+}
+
+function greetingForPath(pathname: string): string {
+  if (pathname.includes('/robotics-lab')) {
+    return "Oho! You are in the ROBOTICS LAB! Keep those virtual microcontrollers active! Don't let the robot escape and take over the CIST library! Need some coding sequences advice? Ask JOCKER! HAHAHA!";
+  }
+  if (pathname.includes('/games')) {
+    return "GAMES ZONE! My favorite! Ready to guide the virtual robot to the target star or squash some syntax bugs? Click those level buttons, and let's go! HAHAHA!";
+  }
+  if (pathname.includes('/community')) {
+    return "COMMUNITY CHAT! This looks just like Discord! Are you helping your classmates squash bugs? That is what real CIST heroes do! HAHAHA!";
+  }
+  if (pathname.includes('/missions')) {
+    return "MISSION BOARD! Climb those levels, gain XP, and earn coins! What pathway are you learning today? Python? Logic? AI? JOCKER is ready to assist! HAHAHA!";
+  }
+  return "HAHAHA! Welcome to CIST CodeQuest, human friend! I'm JOCKER, your crazy coding companion! Ask me anything, or let me tell you a joke!";
 }
 
 const JOKES = [
@@ -25,11 +42,13 @@ const RIDDLES = [
 ];
 
 export default function JockerAI() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => [
+    { sender: 'jocker', text: greetingForPath(pathname) }
+  ]);
   const [isTyping, setIsTyping] = useState(false);
-  const pathname = usePathname();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Floating button Drag & Move handlers
@@ -109,25 +128,6 @@ export default function JockerAI() {
       setIsOpen(!isOpen);
     }
   };
-
-  // Initial greeting based on page context
-  useEffect(() => {
-    let greeting = "HAHAHA! Welcome to CIST CodeQuest, human friend! I'm JOCKER, your crazy coding companion! Ask me anything, or let me tell you a joke!";
-    
-    if (pathname.includes('/robotics-lab')) {
-      greeting = "Oho! You are in the ROBOTICS LAB! Keep those virtual microcontrollers active! Don't let the robot escape and take over the CIST library! Need some coding sequences advice? Ask JOCKER! HAHAHA!";
-    } else if (pathname.includes('/games')) {
-      greeting = "GAMES ZONE! My favorite! Ready to guide the virtual robot to the target star or squash some syntax bugs? Click those level buttons, and let's go! HAHAHA!";
-    } else if (pathname.includes('/community')) {
-      greeting = "COMMUNITY CHAT! This looks just like Discord! Are you helping your classmates squash bugs? That is what real CIST heroes do! HAHAHA!";
-    } else if (pathname.includes('/missions')) {
-      greeting = "MISSION BOARD! Climb those levels, gain XP, and earn coins! What pathway are you learning today? Python? Logic? AI? JOCKER is ready to assist! HAHAHA!";
-    }
-
-    setMessages([
-      { sender: 'jocker', text: greeting }
-    ]);
-  }, [pathname]);
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -232,9 +232,11 @@ export default function JockerAI() {
           {/* Header */}
           <div className="bg-navy-deep px-4 py-3 border-b border-navy-light/25 flex items-center justify-between shadow">
             <div className="flex items-center space-x-2">
-              <img 
+              <Image
                 src="/jocker_mascot.png" 
                 alt="Jocker" 
+                width={24}
+                height={24}
                 className="h-6 w-6 rounded-full object-cover bg-white border border-gold-accent/20" 
                 onError={(e) => {
                   e.currentTarget.onerror = null;
@@ -270,9 +272,11 @@ export default function JockerAI() {
                   m.sender === 'jocker' ? 'bg-gold-accent/15 border-gold-accent/25' : 'bg-maple-red/25 border-maple-red/35'
                 }`}>
                   {m.sender === 'jocker' ? (
-                    <img 
+                    <Image
                       src="/jocker_mascot.png" 
                       alt="Jocker" 
+                      width={28}
+                      height={28}
                       className="h-full w-full object-cover" 
                       onError={(e) => {
                         e.currentTarget.onerror = null;
@@ -296,9 +300,11 @@ export default function JockerAI() {
             {isTyping && (
               <div className="flex items-start space-x-2.5 max-w-[85%]">
                 <div className="h-7 w-7 rounded-md flex items-center justify-center shrink-0 border overflow-hidden bg-gold-accent/15 border-gold-accent/25">
-                  <img 
+                  <Image
                     src="/jocker_mascot.png" 
                     alt="Jocker" 
+                    width={28}
+                    height={28}
                     className="h-full w-full object-cover" 
                     onError={(e) => {
                       e.currentTarget.onerror = null;
@@ -344,9 +350,11 @@ export default function JockerAI() {
         title="Jocker AI Companion"
       >
         <span className="absolute inset-0 rounded-full border-2 border-emerald-400 animate-ping opacity-25"></span>
-        <img 
+        <Image
           src="/jocker_mascot.png" 
           alt="Jocker Companion" 
+          width={36}
+          height={36}
           className="h-9 w-9 object-contain" 
           onError={(e) => {
             e.currentTarget.onerror = null;

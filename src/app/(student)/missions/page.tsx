@@ -83,7 +83,8 @@ export default function MissionsPage() {
   // Auto-select single course if student only has access to one
   useEffect(() => {
     if (allowedCourses.length === 1 && selectedCourseId === 'all') {
-      setSelectedCourseId(allowedCourses[0].id);
+      const timer = window.setTimeout(() => setSelectedCourseId(allowedCourses[0].id), 0);
+      return () => window.clearTimeout(timer);
     }
   }, [allowedCourses, selectedCourseId]);
 

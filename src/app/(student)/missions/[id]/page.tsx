@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { dbService } from '@/lib/db';
+import { completeTrustedActivity } from '@/lib/progression-client';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -22,6 +23,13 @@ import {
 interface SandboxResult {
   stdout: string;
   error: string;
+}
+
+function getCompletionErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message;
+  if (!error || typeof error !== 'object') return fallback;
+  const dbError = error as { code?: string; message?: string; details?: string; hint?: string };
+  return [dbError.code, dbError.message, dbError.details, dbError.hint].filter(Boolean).join(' | ') || fallback;
 }
 
 function runPythonSandbox(code: string): SandboxResult {
@@ -139,7 +147,7 @@ function runJsSandbox(code: string): SandboxResult {
   };
 
   try {
-    // eslint-disable-next-line no-new-func
+
     const sandbox = new Function('console', `
       try {
         ${code}
@@ -156,7 +164,7 @@ function runJsSandbox(code: string): SandboxResult {
 
 export default function MissionDetailPage() {
   const { id } = useParams() as { id: string };
-  const { student, profile, addXpAndCoins } = useApp();
+  const { student, profile, refreshUser } = useApp();
   const router = useRouter();
 
   const [mission, setMission] = useState<any>(null);
@@ -168,23 +176,31 @@ export default function MissionDetailPage() {
   const [code, setCode] = useState('');
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [lastSuccessfulOutput, setLastSuccessfulOutput] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [attemptsCount, setAttemptsCount] = useState(0);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [completionError, setCompletionError] = useState('');
   const [secondsActive, setSecondsActive] = useState(0);
 
   // Challenge dynamic timer
   useEffect(() => {
     if (!activeItem || activeItem.type !== 'challenge') return;
-    setSecondsActive(0);
-    setAttemptsCount(0);
+    const resetTimer = window.setTimeout(() => {
+      setSecondsActive(0);
+      setAttemptsCount(0);
+    }, 0);
 
     const interval = setInterval(() => {
       setSecondsActive(prev => prev + 1);
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      window.clearTimeout(resetTimer);
+      clearInterval(interval);
+    };
   }, [activeItem]);
 
   useEffect(() => {
@@ -248,9 +264,13 @@ export default function MissionDetailPage() {
     if (activeItem && activeItem.type === 'challenge') {
       const chal = challenges.find(c => c.id === activeItem.id);
       if (chal) {
-        setCode(chal.starter_code);
-        setTerminalLogs(['CIST CodeQuest Sandbox initialized. Ready to execute.']);
-        setIsSuccess(false);
+        const timer = window.setTimeout(() => {
+          setCode(chal.starter_code);
+          setTerminalLogs(['CIST CodeQuest Sandbox initialized. Ready to execute.']);
+          setIsSuccess(false);
+          setLastSuccessfulOutput('');
+        }, 0);
+        return () => window.clearTimeout(timer);
       }
     }
   }, [activeItem, challenges]);
@@ -272,22 +292,33 @@ export default function MissionDetailPage() {
   };
 
   const handleCompleteLesson = async () => {
-    if (!student || !profile || !activeLesson) return;
+    if (!student || !profile || !activeLesson || isCompleting) return;
+    setIsCompleting(true);
+    setCompletionError('');
     try {
-      await dbService.completeLesson(student.id, profile.id, mission.id, activeLesson.id);
-      await addXpAndCoins(25, 5, `Completed Lesson: ${activeLesson.title}`);
+      await completeTrustedActivity({
+        activityType: 'lesson',
+        activityId: activeLesson.id
+      });
 
       // Refresh progress list
       const updatedProg = await dbService.getStudentProgress(student.id);
       setProgress(updatedProg);
 
-      // Check auto mission completion
-      await dbService.checkAndCompleteMission(student.id, profile.id, mission.id);
+      try {
+        await refreshUser();
+      } catch (refreshError) {
+        console.warn('Lesson profile refresh failed:', refreshError instanceof Error ? refreshError.message : String(refreshError));
+      }
 
       // Navigate to next incomplete item
       goToNextItem();
     } catch (err) {
-      console.error(err);
+      const message = getCompletionErrorMessage(err, 'Unable to complete this lesson right now.');
+      console.error('Lesson completion failed:', message);
+      setCompletionError(message);
+    } finally {
+      setIsCompleting(false);
     }
   };
 
@@ -314,6 +345,7 @@ export default function MissionDetailPage() {
           `Please fix syntax / execution errors and run again.`
         ]);
         setIsSuccess(false);
+        setLastSuccessfulOutput('');
       } else if (stdout === expected) {
         setTerminalLogs(prev => [
           ...prev,
@@ -322,6 +354,7 @@ export default function MissionDetailPage() {
           `🎉 All tests passed successfully! Click Publish to submit.`
         ]);
         setIsSuccess(true);
+        setLastSuccessfulOutput(stdout);
       } else {
         setTerminalLogs(prev => [
           ...prev,
@@ -330,36 +363,41 @@ export default function MissionDetailPage() {
           `Review your inputs and run again.`
         ]);
         setIsSuccess(false);
+        setLastSuccessfulOutput('');
       }
     }, 1200);
   };
 
   const handleSubmitChallenge = async () => {
-    if (!student || !profile || !activeChallenge || !isSuccess) return;
+    if (!student || !profile || !activeChallenge || !isSuccess || isCompleting) return;
+    setIsCompleting(true);
+    setCompletionError('');
     try {
-      await dbService.completeChallenge(
-        student.id,
-        profile.id,
-        mission.id,
-        activeChallenge.id,
-        activeChallenge.xp_reward,
-        activeChallenge.coin_reward,
-        100,
-        secondsActive,
+      await completeTrustedActivity({
+        activityType: 'challenge',
+        activityId: activeChallenge.id,
+        submittedOutput: lastSuccessfulOutput,
+        score: 100,
+        timeSpent: secondsActive,
         attemptsCount
-      );
-      await addXpAndCoins(activeChallenge.xp_reward, activeChallenge.coin_reward, `Completed Challenge: ${activeChallenge.title}`);
-
+      });
       // Refresh progress
       const updatedProg = await dbService.getStudentProgress(student.id);
       setProgress(updatedProg);
 
-      // Check auto mission completion
-      await dbService.checkAndCompleteMission(student.id, profile.id, mission.id);
+      try {
+        await refreshUser();
+      } catch (refreshError) {
+        console.warn('Challenge profile refresh failed:', refreshError instanceof Error ? refreshError.message : String(refreshError));
+      }
 
       goToNextItem();
     } catch (err) {
-      console.error(err);
+      const message = getCompletionErrorMessage(err, 'Unable to submit this challenge right now.');
+      console.error('Challenge completion failed:', message);
+      setCompletionError(message);
+    } finally {
+      setIsCompleting(false);
     }
   };
 
@@ -443,6 +481,13 @@ export default function MissionDetailPage() {
         <div className={`lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col justify-between ${
           activeItem?.type === 'lesson' ? 'lg:col-span-12 max-w-4xl mx-auto w-full' : ''
         }`}>
+          {completionError && (
+            <div role="alert" className="mb-5 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{completionError}</span>
+            </div>
+          )}
+
           {activeLesson && (
             <div className="space-y-6">
               <div className="flex items-center space-x-2 text-navy-deep font-black uppercase text-xs tracking-wider">
@@ -481,9 +526,10 @@ export default function MissionDetailPage() {
               <div className="pt-6 border-t border-slate-150 flex justify-end">
                 <button
                   onClick={handleCompleteLesson}
-                  className="flex items-center space-x-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-6 py-3 font-bold text-white shadow transition-all active:scale-95"
+                  disabled={isCompleting}
+                  className="flex items-center space-x-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-6 py-3 font-bold text-white shadow transition-all active:scale-95 disabled:cursor-wait disabled:opacity-60"
                 >
-                  <span>Complete Lesson</span>
+                  <span>{isCompleting ? 'Saving Progress…' : 'Complete Lesson'}</span>
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
@@ -558,7 +604,11 @@ export default function MissionDetailPage() {
               </div>
               <textarea
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                  setIsSuccess(false);
+                  setLastSuccessfulOutput('');
+                }}
                 className="flex-1 w-full bg-transparent text-slate-100 py-4 px-3 outline-none resize-none font-mono leading-6 focus:ring-0"
                 spellCheck="false"
               />
@@ -607,11 +657,11 @@ export default function MissionDetailPage() {
 
               <button
                 onClick={handleSubmitChallenge}
-                disabled={!isSuccess}
+                disabled={!isSuccess || isCompleting}
                 className="flex items-center space-x-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-6 py-2.5 font-bold text-xs text-white shadow transition-all active:scale-95 disabled:opacity-50"
               >
                 <CheckCircle className="h-3.5 w-3.5" />
-                <span>Claim Rewards & Next</span>
+                <span>{isCompleting ? 'Saving Progress…' : 'Claim Rewards & Next'}</span>
               </button>
             </div>
           </div>

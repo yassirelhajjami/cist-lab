@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ student: newStudent });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[ensure-student] Unexpected error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

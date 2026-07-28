@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { dbService, getRankAndLevelForXP } from '@/lib/db';
+import { completeTrustedActivity } from '@/lib/progression-client';
 import { Trophy, Award } from 'lucide-react';
 
 import { Profile, Student, Notification as DbNotification } from '@/types';
@@ -16,7 +17,7 @@ interface AppContextType {
   loading: boolean;
   notifications: DbNotification[];
   loginStreak: number;
-  login: (email: string, password?: string) => Promise<any>;
+  login: (email: string, password?: string) => ReturnType<typeof dbService.login>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   triggerNotification: (title: string, message: string, type?: string) => Promise<void>;
@@ -24,7 +25,13 @@ interface AppContextType {
   refreshNotifications: () => Promise<void>;
   showLevelUp: boolean;
   setShowLevelUp: (show: boolean) => void;
-  levelUpInfo: { oldLevel: number; newLevel: number; newRank: string } | null;
+  levelUpInfo: LevelUpInfo | null;
+}
+
+interface LevelUpInfo {
+  oldLevel: number;
+  newLevel: number;
+  newRank: string;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -36,7 +43,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<DbNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLevelUp, setShowLevelUp] = useState(false);
-  const [levelUpInfo, setLevelUpInfo] = useState<any>(null);
+  const [levelUpInfo, setLevelUpInfo] = useState<LevelUpInfo | null>(null);
   const [loginStreak, setLoginStreak] = useState(0);
   
   const router = useRouter();
@@ -77,7 +84,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshUser();
     // refreshUser is intentionally only called once on mount.
     // Route changes do NOT re-trigger auth so we avoid N+1 Supabase calls.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = async (email: string, password?: string) => {
@@ -124,7 +130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const newXp = res.profile.xp + 10;
           const { level, rank } = getRankAndLevelForXP(newXp);
           
-          await dbService.updateXPAndCoins(res.profile.id, 10, 2, 'Daily Login Streak');
+          await completeTrustedActivity({ activityType: 'daily_login' });
           
           // Re-fetch
           const updated = await dbService.getCurrentUser();
@@ -243,7 +249,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {/* GLOBAL LEVEL UP SCREEN MODAL CELEBRATION */}
       {showLevelUp && levelUpInfo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-dark/90 p-4 animate-fade-in">
-          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border-2 border-gold-accent bg-navy-deep p-8 text-center shadow-2xl">
+          <div role="dialog" aria-modal="true" aria-labelledby="level-up-title" className="relative w-full max-w-md overflow-hidden rounded-2xl border-2 border-gold-accent bg-navy-deep p-8 text-center shadow-2xl">
             {/* Sparkles Background Accent */}
             <div className="absolute -left-10 -top-10 h-40 w-40 rounded-full bg-gold-accent/15 blur-2xl"></div>
             <div className="absolute -right-10 -bottom-10 h-40 w-40 rounded-full bg-maple-red/15 blur-2xl"></div>
@@ -253,7 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               <Trophy className="h-12 w-12" />
             </div>
 
-            <h1 className="mt-6 text-3xl font-extrabold text-gold-accent uppercase tracking-wider">LEVEL UP!</h1>
+            <h1 id="level-up-title" className="mt-6 text-3xl font-extrabold text-gold-accent uppercase tracking-wider">LEVEL UP!</h1>
             <p className="mt-2 text-gray-300">Your computer science skills at CIST are growing!</p>
             
             <div className="mt-6 flex items-center justify-center space-x-6">

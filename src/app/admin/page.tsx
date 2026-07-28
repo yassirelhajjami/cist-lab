@@ -1,7 +1,7 @@
 // src/app/admin/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useSyncExternalStore } from 'react';
 import { dbService } from '@/lib/db';
 import { Users, Compass, ShieldAlert, Award, ArrowUpRight, CheckSquare, Sparkles, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
@@ -31,9 +31,11 @@ export default function AdminOverview() {
   const [chartData, setChartData] = useState<any[]>([]);
   const [completionData, setCompletionData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => { setIsMounted(true); }, []);
+  const isMounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false
+  );
 
   useEffect(() => {
     async function loadStats() {

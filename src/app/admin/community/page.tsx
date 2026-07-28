@@ -37,7 +37,8 @@ export default function AdminCommunityModeration() {
   }
 
   useEffect(() => {
-    loadForumData();
+    const timer = window.setTimeout(() => void loadForumData(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleModeratePost = async (postId: string, status: 'approved' | 'rejected') => {

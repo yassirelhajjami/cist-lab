@@ -524,6 +524,14 @@ CREATE POLICY "Users can update read status on their own notifications" ON publi
     FOR UPDATE USING (user_id IN (SELECT id FROM public.profiles WHERE user_id = auth.uid()))
     WITH CHECK (user_id IN (SELECT id FROM public.profiles WHERE user_id = auth.uid()));
 
+CREATE POLICY "Users can create their own notifications" ON public.notifications
+    FOR INSERT TO authenticated
+    WITH CHECK (
+        user_id IN (
+            SELECT id FROM public.profiles WHERE user_id = (SELECT auth.uid())
+        )
+    );
+
 CREATE POLICY "Admins have full access on notifications" ON public.notifications
     FOR ALL USING (public.is_admin());
 

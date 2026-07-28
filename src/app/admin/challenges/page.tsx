@@ -39,7 +39,8 @@ export default function AdminChallengesManagement() {
   }
 
   useEffect(() => {
-    loadMissions();
+    const timer = window.setTimeout(() => void loadMissions(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   async function loadChallenges() {
@@ -56,7 +57,8 @@ export default function AdminChallengesManagement() {
   }
 
   useEffect(() => {
-    loadChallenges();
+    const timer = window.setTimeout(() => void loadChallenges(), 0);
+    return () => window.clearTimeout(timer);
   }, [selectedMissionId]);
 
   const handleSubmit = async (e: React.FormEvent) => {

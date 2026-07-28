@@ -1,0 +1,12 @@
+{
+  "total": 219,
+  "errors": 162,
+  "warnings": 57,
+  "rules": {
+    "@typescript-eslint/no-explicit-any": 152,
+    "@typescript-eslint/no-unused-vars": 32,
+    "@next/next/no-img-element": 17,
+    "react/no-unescaped-entities": 10,
+    "react-hooks/exhaustive-deps": 8
+  }
+}

@@ -2,6 +2,8 @@
 import { supabase, isSupabaseConfigured } from '../db-client';
 import { getRankAndLevelForXP } from './constants';
 import { localDB } from './local-db';
+import { BADGE_REQUIREMENTS, BadgeActivityStats } from './badge-requirements';
+import type { User } from '@supabase/supabase-js';
 import {
   Course,
   Profile,
@@ -19,17 +21,41 @@ import {
   Notification
 } from '@/types';
 
+type StudentProfileRow = Profile & { students: Student | Student[] | null };
+
+interface LeaderboardEntry {
+  id: string;
+  name: string;
+  avatar_url?: string | null;
+  grade?: string | null;
+  level: number;
+  rank_title: string;
+  xp: number;
+  score: number;
+}
+
+const describeDbError = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (!error || typeof error !== 'object') return String(error || 'Unknown database error');
+  const dbError = error as { code?: string; message?: string; details?: string; hint?: string };
+  return [dbError.code, dbError.message, dbError.details, dbError.hint].filter(Boolean).join(' | ') || 'Unknown database error';
+};
+
+const isUuid = (value: string | null | undefined): value is string =>
+  Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value));
+
 export const dbService = {
   // --- AUTH SERVICES ---
-  async login(email: string, password?: string): Promise<{ user: any; profile: Profile; student: Student | null }> {
+  async login(email: string, password?: string): Promise<{ user: User; profile: Profile; student: Student | null }> {
     if (isSupabaseConfigured && supabase) {
       let data, error;
       try {
         ({ data, error } = await supabase.auth.signInWithPassword({ email, password: password || '' }));
-      } catch (networkErr: any) {
+      } catch {
         throw new Error('Cannot reach the server. Please check your internet connection and try again.');
       }
       if (error) throw error;
+      if (!data.user) throw new Error('Authentication succeeded without a user record.');
 
       // Fetch profile from Supabase
       const { data: profile, error: profileError } = await supabase
@@ -70,7 +96,7 @@ export const dbService = {
         localStorage.setItem('cist_cq_session', JSON.stringify({ userId: profile.id, role: profile.role }));
       }
       const student = localDB.students.find((s: Student) => s.profile_id === profile.id) || null;
-      return { user: { id: profile.id, email: profile.email }, profile, student };
+      return { user: { id: profile.id, email: profile.email } as User, profile, student };
     }
   },
 
@@ -79,19 +105,19 @@ export const dbService = {
       localStorage.removeItem('cist_cq_session');
     }
     if (isSupabaseConfigured && supabase) {
-      try { await supabase.auth.signOut(); } catch (_) {}
+      try { await supabase.auth.signOut(); } catch {}
     }
   },
 
-  async getCurrentUser(): Promise<{ user: any; profile: Profile; student: Student | null } | null> {
+  async getCurrentUser(): Promise<{ user: User; profile: Profile; student: Student | null } | null> {
     if (isSupabaseConfigured && supabase) {
-      let user: any = null;
+      let user: User | null = null;
       try {
         const { data, error } = await supabase.auth.getUser();
         if (error || !data.user) return null;
         user = data.user;
-      } catch (networkErr: any) {
-        console.warn('[db] Supabase getUser() network error — falling back to unauthenticated:', networkErr.message);
+      } catch (networkErr: unknown) {
+        console.warn('[db] Supabase getUser() network error — falling back to unauthenticated:', describeDbError(networkErr));
         return null;
       }
       let profile: Profile | null = null;
@@ -122,8 +148,8 @@ export const dbService = {
                   console.warn('[db] ensure-student returned', res.status);
                 }
               }
-            } catch (healErr: any) {
-              console.error('[db] Auto-heal via API failed:', healErr.message);
+            } catch (healErr: unknown) {
+              console.error('[db] Auto-heal via API failed:', describeDbError(healErr));
             }
           } else {
             student = s;
@@ -155,7 +181,7 @@ export const dbService = {
         list.push(student);
         localDB.students = list;
       }
-      return { user: { id: profile.id, email: profile.email }, profile, student };
+      return { user: { id: profile.id, email: profile.email } as User, profile, student };
     }
   },
 
@@ -165,7 +191,7 @@ export const dbService = {
       const { data, error } = await supabase.from('profiles').select('*, students(*)').eq('role', 'student');
       if (error) throw error;
       
-      return data.map((item: any) => {
+      return (data as StudentProfileRow[]).map((item) => {
         let studentObj: Student | null = null;
         if (Array.isArray(item.students)) {
           studentObj = item.students[0] || null;
@@ -194,9 +220,9 @@ export const dbService = {
     } else {
       const students = localDB.students;
       const profiles = localDB.profiles.filter((p: Profile) => p.role === 'student');
-      return students.map((s: Student) => {
+      return students.flatMap((s: Student) => {
         const p = profiles.find((prof: Profile) => prof.id === s.profile_id);
-        return { ...p, students: s };
+        return p ? [{ ...p, students: s }] : [];
       });
     }
   },
@@ -367,7 +393,7 @@ export const dbService = {
         await supabase.from('comments').delete().eq('student_id', student.id);
         const { data: posts } = await supabase.from('community_posts').select('id').eq('student_id', student.id);
         if (posts && posts.length > 0) {
-          const postIds = posts.map((p: any) => p.id);
+          const postIds = posts.map((p: { id: string }) => p.id);
           await supabase.from('comments').delete().in('post_id', postIds);
           await supabase.from('community_posts').delete().eq('student_id', student.id);
         }
@@ -385,7 +411,7 @@ export const dbService = {
     }
   },
 
-  async updateXPAndCoins(profileId: string, xpDelta: number, coinsDelta: number, reason: string): Promise<void> {
+  async updateXPAndCoins(profileId: string, xpDelta: number, coinsDelta: number, _reason: string): Promise<void> {
     if (isSupabaseConfigured && supabase) {
       const { data: profile } = await supabase.from('profiles').select('xp, coins, level').eq('id', profileId).single();
       if (profile) {
@@ -727,22 +753,34 @@ export const dbService = {
       if (!studentId) return [];
 
       const { data, error } = await supabase.from('student_progress').select('*').eq('student_id', studentId);
-      if (error) throw error;
-      return data;
+      if (error) throw new Error(`Unable to load student progress: ${describeDbError(error)}`);
+      // The curriculum can intentionally fall back to local seed content when the
+      // hosted tables are empty. Include progress for that content as well so a
+      // signed-in student can complete lessons whose seed IDs are not UUIDs.
+      const localProgress = localDB.progress.filter((p: StudentProgress) => p.student_id === studentId);
+      return [...(data ?? []), ...localProgress].filter(
+        (item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index
+      );
     } else {
       return localDB.progress.filter((p: StudentProgress) => p.student_id === studentId);
     }
   },
 
   async completeLesson(studentId: string, profileId: string, missionId: string, lessonId: string): Promise<StudentProgress> {
-    if (isSupabaseConfigured && supabase) {
-      const { data: exists } = await supabase.from('student_progress')
+    if (isSupabaseConfigured && supabase
+      && isUuid(studentId) && isUuid(missionId) && isUuid(lessonId)) {
+      const { data: existingRows, error: lookupError } = await supabase.from('student_progress')
         .select('*')
         .eq('student_id', studentId)
         .eq('lesson_id', lessonId)
-        .maybeSingle();
+        .limit(1);
 
-      if (exists) return exists;
+      if (lookupError) {
+        throw new Error(`Unable to check lesson progress: ${describeDbError(lookupError)}`);
+      }
+
+      const existing = existingRows?.[0] as StudentProgress | undefined;
+      if (existing) return existing;
 
       const { data, error } = await supabase.from('student_progress').insert({
         student_id: studentId,
@@ -753,7 +791,10 @@ export const dbService = {
         completed_at: new Date().toISOString()
       }).select().single();
       
-      if (error) throw error;
+      if (error) {
+        throw new Error(`Unable to save lesson progress: ${describeDbError(error)}`);
+      }
+      if (!data) throw new Error('Unable to save lesson progress: no row was returned.');
       
       await this.updateXPAndCoins(profileId, 25, 5, 'Completed Lesson');
       return data;
@@ -794,12 +835,19 @@ export const dbService = {
     timeSpent = 0,
     attemptsCount = 1
   ): Promise<StudentProgress> {
-    if (isSupabaseConfigured && supabase) {
-      const { data: exists } = await supabase.from('student_progress')
+    if (isSupabaseConfigured && supabase
+      && isUuid(studentId) && isUuid(missionId) && isUuid(challengeId)) {
+      const { data: existingRows, error: lookupError } = await supabase.from('student_progress')
         .select('*')
         .eq('student_id', studentId)
         .eq('challenge_id', challengeId)
-        .maybeSingle();
+        .limit(1);
+
+      if (lookupError) {
+        throw new Error(`Unable to check challenge progress: ${describeDbError(lookupError)}`);
+      }
+
+      const exists = existingRows?.[0] as StudentProgress | undefined;
 
       if (exists) {
         if (exists.status === 'completed') return exists;
@@ -812,7 +860,8 @@ export const dbService = {
           completed_at: new Date().toISOString()
         }).eq('id', exists.id).select().single();
         
-        if (error) throw error;
+        if (error) throw new Error(`Unable to update challenge progress: ${describeDbError(error)}`);
+        if (!data) throw new Error('Unable to update challenge progress: no row was returned.');
         await this.updateXPAndCoins(profileId, xpReward, coinReward, 'Completed Challenge');
         return data;
       }
@@ -828,7 +877,8 @@ export const dbService = {
         completed_at: new Date().toISOString()
       }).select().single();
       
-      if (error) throw error;
+      if (error) throw new Error(`Unable to save challenge progress: ${describeDbError(error)}`);
+      if (!data) throw new Error('Unable to save challenge progress: no row was returned.');
       
       await this.updateXPAndCoins(profileId, xpReward, coinReward, 'Completed Challenge');
       return data;
@@ -881,6 +931,10 @@ export const dbService = {
     const lessons = await this.getLessons(missionId);
     const challenges = await this.getChallenges(missionId);
     const progress = await this.getStudentProgress(studentId);
+    const canUseRemoteProgress = isSupabaseConfigured && supabase
+      && isUuid(studentId) && isUuid(missionId)
+      && lessons.every((lesson: Lesson) => isUuid(lesson.id))
+      && challenges.every((challenge: Challenge) => isUuid(challenge.id));
 
     if (lessons.length === 0 && challenges.length === 0) {
       return false;
@@ -896,14 +950,15 @@ export const dbService = {
 
       const missionProgressExists = progress.find((p: StudentProgress) => p.mission_id === missionId && !p.lesson_id && !p.challenge_id && p.status === 'completed');
       if (!missionProgressExists) {
-        if (isSupabaseConfigured && supabase) {
-          await supabase.from('student_progress').insert({
+        if (canUseRemoteProgress && supabase) {
+          const { error } = await supabase.from('student_progress').insert({
             student_id: studentId,
             mission_id: missionId,
             status: 'completed',
             score: 100,
             completed_at: new Date().toISOString()
           });
+          if (error) throw new Error(`Unable to save mission progress: ${describeDbError(error)}`);
         } else {
           const newProgress: StudentProgress = {
             id: `pgr-gen-${Math.random().toString(36).substr(2, 9)}`,
@@ -924,12 +979,6 @@ export const dbService = {
         await this.updateXPAndCoins(profileId, xp, coins, `Completed Mission: ${mission?.title}`);
         await this.createNotification(profileId, '🎉 Mission Completed!', `You completed "${mission?.title}" and earned ${xp} XP and ${coins} Coins!`, 'system');
 
-        if (missionId === 'e1111111-1111-1111-1111-111111111111') {
-          await this.awardBadge(studentId, 'b1111111-1111-1111-1111-111111111111');
-        }
-        if (missionId === 'e4444444-4444-4444-4444-444444444444') {
-          await this.awardBadge(studentId, 'b4444444-4444-4444-4444-444444444444');
-        }
         return true;
       }
     }
@@ -952,10 +1001,10 @@ export const dbService = {
 
       return projects.map((p: Project) => {
         const s = students.find((st: Student) => st.id === p.student_id);
-        const prof = s ? profiles.find((pr: Profile) => pr.id === s.profile_id) : null;
+        const prof = s ? profiles.find((pr: Profile) => pr.id === s.profile_id) : undefined;
         return {
           ...p,
-          students: s ? { ...s, profiles: prof } : null
+          students: s ? { ...s, profiles: prof } : undefined
         };
       }).sort((a: Project, b: Project) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }
@@ -1007,7 +1056,7 @@ export const dbService = {
         if (student) {
           await this.updateXPAndCoins(student.profile_id, xp + 200, 50, `Project Approved: ${feedback}`);
           await this.createNotification(student.profile_id, '🎨 Project Approved!', `Your project was approved by teacher! You got a score of ${score}/100 and earned ${xp + 200} XP!`, 'project');
-          await this.awardBadge(project.student_id, 'b5555555-5555-5555-5555-555555555555');
+          await this.evaluateBadgeUnlocks(project.student_id, student.profile_id);
         }
       }
       return true;
@@ -1031,7 +1080,7 @@ export const dbService = {
         if (student) {
           await this.updateXPAndCoins(student.profile_id, xp + 200, 50, `Project Approved: ${feedback}`);
           await this.createNotification(student.profile_id, '🎨 Project Approved!', `Your project "${project.title}" was approved! Score: ${score}/100 (+${xp + 200} XP)`, 'project');
-          await this.awardBadge(project.student_id, 'b5555555-5555-5555-5555-555555555555');
+          await this.evaluateBadgeUnlocks(project.student_id, student.profile_id);
         }
       }
       return true;
@@ -1202,7 +1251,9 @@ export const dbService = {
       if (error) throw error;
       return true;
     } else {
-      const comments = localDB.comments.map((c: Comment) => (c.id === commentId ? { ...c, status: 'hidden' } : c));
+      const comments: Comment[] = localDB.comments.map((c: Comment) =>
+        c.id === commentId ? { ...c, status: 'hidden' } : c
+      );
       localDB.comments = comments;
       return true;
     }
@@ -1275,7 +1326,11 @@ export const dbService = {
         if (!uuidRegex.test(studentId)) return [];
         const { data, error } = await supabase.from('student_badges').select('*, badges(*)').eq('student_id', studentId);
         if (error) throw error;
-        return data.map((sb: any) => sb.badges);
+        // A configured account must display only awards confirmed by the
+        // database. Never merge offline/localStorage awards into live data.
+        return (data as Array<StudentBadge & { badges: Badge | null }>)
+          .map((sb) => sb.badges)
+          .filter((badge): badge is Badge => badge !== null);
       } else {
         const { data, error } = await supabase.from('student_badges').select('*, badges(*)');
         if (error) throw error;
@@ -1291,9 +1346,58 @@ export const dbService = {
         return localDB.studentBadges.map((sb: StudentBadge) => ({
           ...sb,
           badges: badges.find((b: Badge) => b.id === sb.badge_id)
-        })).filter((sb: any) => sb.badges).map((sb: any) => sb.badges) as Badge[];
+        }))
+          .map((sb) => sb.badges)
+          .filter((badge): badge is Badge => Boolean(badge));
       }
     }
+  },
+
+  async evaluateBadgeUnlocks(studentId: string, profileId: string): Promise<Badge[]> {
+    const [badges, progress] = await Promise.all([
+      this.getBadges(),
+      this.getStudentProgress(studentId)
+    ]);
+
+    let profile: Profile | undefined;
+    let approvedProjects = 0;
+    if (isSupabaseConfigured && supabase && isUuid(studentId) && isUuid(profileId)) {
+      const [{ data: profileData, error: profileError }, { count, error: projectError }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', profileId).single(),
+        supabase.from('projects').select('id', { count: 'exact', head: true }).eq('student_id', studentId).eq('status', 'approved')
+      ]);
+      if (profileError) throw new Error(`Unable to evaluate badge profile: ${describeDbError(profileError)}`);
+      if (projectError) throw new Error(`Unable to evaluate badge projects: ${describeDbError(projectError)}`);
+      profile = profileData as Profile;
+      approvedProjects = count ?? 0;
+    } else {
+      profile = localDB.profiles.find((item: Profile) => item.id === profileId);
+      approvedProjects = localDB.projects.filter((project: Project) => project.student_id === studentId && project.status === 'approved').length;
+    }
+
+    if (!profile) return [];
+
+    const uniqueCount = (values: Array<string | null | undefined>) => new Set(values.filter(Boolean)).size;
+    const completed = progress.filter((item: StudentProgress) => item.status === 'completed');
+    const stats: BadgeActivityStats = {
+      lessons: uniqueCount(completed.map((item) => item.lesson_id)),
+      challenges: uniqueCount(completed.map((item) => item.challenge_id)),
+      missions: uniqueCount(completed.filter((item) => !item.lesson_id && !item.challenge_id).map((item) => item.mission_id)),
+      approvedProjects,
+      coins: profile.coins ?? 0,
+      xp: profile.xp ?? 0,
+      level: profile.level ?? 1
+    };
+
+    const unlocked: Badge[] = [];
+    for (const badge of badges) {
+      const requirement = BADGE_REQUIREMENTS[badge.name];
+      if (requirement?.isMet(stats)) {
+        const award = await this.awardBadge(studentId, badge.id);
+        if (award) unlocked.push(badge);
+      }
+    }
+    return unlocked;
   },
 
   async awardBadge(studentId: string, badgeId: string): Promise<StudentBadge | null> {
@@ -1307,6 +1411,10 @@ export const dbService = {
       if (error) {
         if (error.code === '23505') {
           return null; // Gracefully handle unique violations
+        }
+        if (error.code === '42501') {
+          console.warn(`[db] Badge award was not persisted: ${describeDbError(error)}`);
+          return null;
         }
         throw error;
       }
@@ -1366,7 +1474,7 @@ export const dbService = {
 
       return requests.map((r: LeaderboardRequest) => {
         const s = students.find((st: Student) => st.id === r.student_id);
-        const prof = s ? profiles.find((p: Profile) => p.id === s.profile_id) : null;
+        const prof = s ? profiles.find((p: Profile) => p.id === s.profile_id) : undefined;
         return {
           ...r,
           students: s ? { ...s, profiles: prof } : undefined
@@ -1450,7 +1558,7 @@ export const dbService = {
   },
 
   // Get ranked leaderboard data
-  async getLeaderboard(): Promise<any[]> {
+  async getLeaderboard(): Promise<LeaderboardEntry[]> {
     const studentsList = await this.getStudents();
     const requests = await this.getLeaderboardRequests();
     const approvedStudentIds = requests
@@ -1468,8 +1576,8 @@ export const dbService = {
     }
 
     const leaderboard = studentsList
-      .filter((s: any) => s.students && approvedStudentIds.includes(s.students.id) && s.status === 'active')
-      .map((s: any) => {
+      .filter((s) => s.students && approvedStudentIds.includes(s.students.id) && s.status === 'active')
+      .map((s): LeaderboardEntry => {
         const studentProjects = allApprovedProjects.filter((p: Project) => p.student_id === s.students.id);
         const votesWeight = studentProjects.reduce((sum: number, p: Project) => sum + p.votes_count, 0) * 10;
         const scoreWeight = studentProjects.length > 0
@@ -1489,7 +1597,7 @@ export const dbService = {
         };
       });
 
-    return leaderboard.sort((a: any, b: any) => b.score - a.score);
+    return leaderboard.sort((a, b) => b.score - a.score);
   },
 
   // --- NOTIFICATIONS ---
@@ -1514,7 +1622,20 @@ export const dbService = {
         type,
         is_read: false
       }).select().single();
-      if (error) throw error;
+      if (error) {
+        // Notifications are a secondary convenience. A missing/outdated RLS
+        // policy must never reject the parent reward or game-completion flow.
+        console.warn(`[db] Notification was not persisted: ${describeDbError(error)}`);
+        return {
+          id: `notification-pending-${Date.now()}`,
+          user_id: profileId,
+          title,
+          message,
+          type,
+          is_read: false,
+          created_at: new Date().toISOString()
+        };
+      }
       return data;
     } else {
       const newNotification: Notification = {

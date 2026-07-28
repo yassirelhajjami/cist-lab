@@ -18,13 +18,11 @@ import {
   VolumeX,
   Plus,
   Trash2,
-  ArrowRight,
-  HelpCircle,
-  Undo2,
   Flame,
   CheckCircle2,
   ChevronLeft
 } from 'lucide-react';
+import { isArcadeLevelUnlocked } from '@/lib/progression/level-access';
 import {
   GRADE_NAMES,
   getLevelsForGrade,
@@ -88,7 +86,7 @@ export default function CodingArcadePage() {
 
   // Program build states
   const [program, setProgram] = useState<CommandItem[]>([]);
-  const [activeSlot, setActiveSlot] = useState<number>(0);
+  const commandIdRef = useRef(0);
 
   // Dialog & Mascots states
   const [showWinModal, setShowWinModal] = useState<boolean>(false);
@@ -97,14 +95,15 @@ export default function CodingArcadePage() {
 
   // Local storage loading
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    const frame = window.requestAnimationFrame(() => {
       const savedCompleted = localStorage.getItem('cist_arcade_completed_levels');
       const savedStars = localStorage.getItem('cist_arcade_level_stars');
       const savedSound = localStorage.getItem('cist_arcade_sound');
       if (savedCompleted) setCompletedLevels(JSON.parse(savedCompleted));
       if (savedStars) setLevelStars(JSON.parse(savedStars));
       if (savedSound) setSoundEnabled(savedSound === 'true');
-    }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   // Update sound state to localstorage
@@ -116,7 +115,8 @@ export default function CodingArcadePage() {
 
   // Helper: auto-detect user's school grade on profile load
   useEffect(() => {
-    if (profile?.grade) {
+    const frame = window.requestAnimationFrame(() => {
+      if (!profile?.grade) return;
       const match = profile.grade.match(/\d+/);
       if (match) {
         const num = parseInt(match[0], 10);
@@ -124,7 +124,8 @@ export default function CodingArcadePage() {
           setSelectedGrade(num);
         }
       }
-    }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [profile]);
 
   // Load level definitions
@@ -132,14 +133,11 @@ export default function CodingArcadePage() {
 
   // Load selected level into sandbox
   const selectLevel = (level: LevelDef) => {
-    const firstLevelInStage = (level.grade - 1) * 10 + 1;
-    const unlocked = level.id === firstLevelInStage || completedLevels.includes(level.id - 1);
-    if (!unlocked) return;
+    if (!isArcadeLevelUnlocked(level.id, completedLevels)) return;
 
     setActiveLevel(level);
     resetSandbox(level);
     setProgram([]);
-    setActiveSlot(0);
     setShowWinModal(false);
     setRewardsClaimed(false);
   };
@@ -173,8 +171,9 @@ export default function CodingArcadePage() {
       return;
     }
 
+    commandIdRef.current += 1;
     let newItem: CommandItem = {
-      id: Math.random().toString(36).substring(2, 9),
+      id: `command-${commandIdRef.current}`,
       type
     };
 
@@ -190,7 +189,6 @@ export default function CodingArcadePage() {
     }
 
     setProgram([...program, newItem]);
-    setActiveSlot(program.length + 1);
   };
 
   // Remove command from program list
@@ -198,13 +196,11 @@ export default function CodingArcadePage() {
     const updated = [...program];
     updated.splice(idx, 1);
     setProgram(updated);
-    setActiveSlot(Math.max(0, updated.length));
   };
 
   // Clear entire program
   const clearProgram = () => {
     setProgram([]);
-    setActiveSlot(0);
     resetSandbox();
   };
 
@@ -230,7 +226,7 @@ export default function CodingArcadePage() {
       if (item.type.startsWith('repeat_') && item.loopAction && item.loopCount) {
         for (let loopIdx = 0; loopIdx < item.loopCount; loopIdx++) {
           executionQueue.push({
-            type: item.loopAction as any,
+            type: item.loopAction,
             originIdx: idx,
             loopAction: `Loop ${loopIdx + 1}/${item.loopCount}`
           });
@@ -248,7 +244,7 @@ export default function CodingArcadePage() {
     let x = activeLevel.startPos;
     let y = 0;
     let face: 'right' | 'left' = activeLevel.chestPos >= activeLevel.startPos ? 'right' : 'left';
-    let bananas = [...collectedBananas];
+    const bananas = [...collectedBananas];
 
     const intervalTime = 800 / speed;
 
@@ -473,10 +469,7 @@ export default function CodingArcadePage() {
 
   // Level status checkers
   const isLevelUnlocked = (lvl: LevelDef) => {
-    if (lvl.id === 1) return true;
-    const startOfGradeId = (lvl.grade - 1) * 10 + 1;
-    if (lvl.id === startOfGradeId) return true; // First level of any grade is always unlocked
-    return completedLevels.includes(lvl.id - 1);
+    return isArcadeLevelUnlocked(lvl.id, completedLevels);
   };
 
   const totalStarsEarned = Object.values(levelStars).reduce((sum, val) => sum + val, 0);
@@ -746,7 +739,7 @@ export default function CodingArcadePage() {
                 <span className="text-xs font-black uppercase tracking-wider text-slate-400">
                   Level {activeLevel.grade}-{activeLevel.id - (activeLevel.grade - 1) * 10}
                 </span>
-                <h2 className="text-sm font-extrabold text-slate-200">"{activeLevel.name}"</h2>
+                <h2 className="text-sm font-extrabold text-slate-200">&ldquo;{activeLevel.name}&rdquo;</h2>
               </div>
 
               <div className="flex items-center gap-2 text-xs font-black uppercase bg-navy-medium/50 px-2.5 py-1 rounded-lg border border-navy-light/10 text-indigo-400">
@@ -1044,7 +1037,7 @@ export default function CodingArcadePage() {
                               <select
                                 disabled={isRunning}
                                 value={item.loopAction}
-                                onChange={(e) => updateRepeatConfig(idx, { loopAction: e.target.value as any })}
+                                onChange={(e) => updateRepeatConfig(idx, { loopAction: e.target.value as CommandItem['loopAction'] })}
                                 className="bg-navy-dark text-slate-200 border border-navy-light/20 rounded px-1 py-0.5 text-[10px] font-semibold w-full focus:outline-none"
                               >
                                 <option value="forward">Step Forward</option>
@@ -1060,7 +1053,7 @@ export default function CodingArcadePage() {
                                   <button
                                     key={t}
                                     disabled={isRunning}
-                                    onClick={() => updateRepeatConfig(idx, { loopCount: t, type: `repeat_${t}` as any })}
+                                    onClick={() => updateRepeatConfig(idx, { loopCount: t, type: `repeat_${t}` as BlockType })}
                                     className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
                                       item.loopCount === t 
                                         ? 'bg-indigo-500 text-white' 

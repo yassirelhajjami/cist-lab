@@ -42,7 +42,8 @@ export default function LeaderboardPage() {
   }
 
   useEffect(() => {
-    loadLeaderboardData();
+    const timer = window.setTimeout(() => void loadLeaderboardData(), 0);
+    return () => window.clearTimeout(timer);
   }, [student]);
 
   const handleRequestSubmit = async (e: React.FormEvent) => {

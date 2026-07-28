@@ -3,22 +3,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
-import { dbService } from '@/lib/db';
 import {
-  Play,
-  Pause,
-  ChevronRight as StepIcon,
-  RotateCcw as ResetIcon,
-  FastForward as SpeedIcon,
-  Star as StarIcon,
   Award,
-  Lock,
-  CheckCircle2,
   Trash2,
   Undo2,
   Redo2,
   BookOpen
 } from 'lucide-react';
+import { TempleIcon } from '@/components/ui/TempleIcon';
 
 // =========================================================================
 // DATA MODELS
@@ -477,8 +469,16 @@ const LEVEL_DEFS: LevelDef[] = [
   }
 ];
 
-export default function LogicArena() {
-  const { addXpAndCoins } = useApp();
+const TEMPLE_PHASES = [
+  { id: 1, name: 'Path of Steps', concept: 'Sequencing & direction', color: 'from-emerald-500 to-teal-600' },
+  { id: 2, name: 'Chromatic Ruins', concept: 'Conditions & decisions', color: 'from-sky-500 to-blue-700' },
+  { id: 3, name: 'Echo Chambers', concept: 'Functions & loops', color: 'from-violet-500 to-purple-700' },
+  { id: 4, name: 'Recursive Vault', concept: 'Recursion & stack logic', color: 'from-orange-500 to-red-600' },
+  { id: 5, name: 'Architect Sanctum', concept: 'Optimization & algorithms', color: 'from-amber-400 to-yellow-600' },
+] as const;
+
+export default function PuzzleTemple() {
+  const { addXpAndCoins, student } = useApp();
 
   // Loader & Level Index States
   const [activeTab, setActiveTab] = useState<'games' | 'test'>('games');
@@ -491,26 +491,47 @@ export default function LogicArena() {
 
   // Load progress state from localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedLevels = localStorage.getItem('cist_logic_levels_21');
-      const savedStars = localStorage.getItem('cist_logic_stars_21');
-      const savedPhases = localStorage.getItem('cist_logic_phases_21');
+    const frame = window.requestAnimationFrame(() => {
+      const progressKey = student?.id || 'guest';
+      const savedLevels = localStorage.getItem(`cist_puzzle_temple_levels_${progressKey}`) || localStorage.getItem('cist_logic_levels_21');
+      const savedStars = localStorage.getItem(`cist_puzzle_temple_stars_${progressKey}`) || localStorage.getItem('cist_logic_stars_21');
+      const savedPhases = localStorage.getItem(`cist_puzzle_temple_phases_${progressKey}`) || localStorage.getItem('cist_logic_phases_21');
       if (savedLevels) setCompletedLevels(JSON.parse(savedLevels));
       if (savedStars) setLevelStarsMap(JSON.parse(savedStars));
       if (savedPhases) setUnlockedPhases(JSON.parse(savedPhases));
-    }
-  }, []);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [student?.id]);
 
   const saveProgress = (levels: number[], phases: number[], starsMap: Record<number, number>) => {
     setCompletedLevels(levels);
     setUnlockedPhases(phases);
     setLevelStarsMap(starsMap);
-    localStorage.setItem('cist_logic_levels_21', JSON.stringify(levels));
-    localStorage.setItem('cist_logic_stars_21', JSON.stringify(starsMap));
-    localStorage.setItem('cist_logic_phases_21', JSON.stringify(phases));
+    const progressKey = student?.id || 'guest';
+    localStorage.setItem(`cist_puzzle_temple_levels_${progressKey}`, JSON.stringify(levels));
+    localStorage.setItem(`cist_puzzle_temple_stars_${progressKey}`, JSON.stringify(starsMap));
+    localStorage.setItem(`cist_puzzle_temple_phases_${progressKey}`, JSON.stringify(phases));
   };
 
   const activeLevel = LEVEL_DEFS[selectedLevelIdx];
+  const activePhaseInfo = TEMPLE_PHASES.find((phase) => phase.id === activePhase) ?? TEMPLE_PHASES[0];
+  const totalStars = Object.values(levelStarsMap).reduce((sum, stars) => sum + stars, 0);
+  const phaseLevels = LEVEL_DEFS.filter((level) => level.phase === activePhase);
+  const phaseCompletedCount = phaseLevels.filter((level) => completedLevels.includes(level.id)).length;
+  const phaseMastered = phaseCompletedCount === phaseLevels.length;
+  const isLevelUnlocked = (level: LevelDef) => {
+    if (!unlockedPhases.includes(level.phase)) return false;
+    const previousLevel = LEVEL_DEFS.find((candidate) => candidate.id === level.id - 1);
+    return !previousLevel || previousLevel.phase !== level.phase || completedLevels.includes(previousLevel.id);
+  };
+  const pathRows = activeLevel.path.map((cell) => cell.r);
+  const pathCols = activeLevel.path.map((cell) => cell.c);
+  const minVisibleRow = Math.max(0, Math.min(...pathRows) - 1);
+  const maxVisibleRow = Math.min(activeLevel.rows - 1, Math.max(...pathRows) + 1);
+  const minVisibleCol = Math.max(0, Math.min(...pathCols) - 1);
+  const maxVisibleCol = Math.min(activeLevel.cols - 1, Math.max(...pathCols) + 1);
+  const visibleRows = Array.from({ length: maxVisibleRow - minVisibleRow + 1 }, (_, index) => minVisibleRow + index);
+  const visibleCols = Array.from({ length: maxVisibleCol - minVisibleCol + 1 }, (_, index) => minVisibleCol + index);
 
   // Game execution state variables
   const [gridState, setGridState] = useState<Cell[][]>([]);
@@ -537,6 +558,7 @@ export default function LogicArena() {
   const [runtimeRobot, setRuntimeRobot] = useState<RobotState>({ r: 0, c: 0, dir: 'E' });
   const [runtimeGrid, setRuntimeGrid] = useState<Cell[][]>([]);
   const [starsLeft, setStarsLeft] = useState<number>(0);
+  const displayedStarsLeft = isPlaying ? starsLeft : activeLevel.stars.length;
   const [stepCount, setStepCount] = useState<number>(0);
 
   // Level Editor Mode
@@ -787,9 +809,9 @@ export default function LogicArena() {
     }
 
     // Get current instruction pointer frame
-    let updatedStack = [...runtimeStack];
-    let frameIdx = updatedStack.length - 1;
-    let frame = updatedStack[frameIdx];
+    const updatedStack = [...runtimeStack];
+    const frameIdx = updatedStack.length - 1;
+    const frame = updatedStack[frameIdx];
 
     const slots = frame.fn === 'f1' ? f1 : f2;
 
@@ -826,8 +848,8 @@ export default function LogicArena() {
     setActiveHistIdx(executionHistory.length);
 
     // Run action
-    let nextRobot = { ...runtimeRobot };
-    let nextGrid = runtimeGrid.map(row => row.map(cell => ({ ...cell })));
+    const nextRobot = { ...runtimeRobot };
+    const nextGrid = runtimeGrid.map(row => row.map(cell => ({ ...cell })));
     let nextStars = starsLeft;
 
     if (slot.cmd === 'up') {
@@ -946,6 +968,17 @@ export default function LogicArena() {
     resetLevelState(activeLevel);
   };
 
+  const goToNextChamber = () => {
+    const nextIndex = selectedLevelIdx + 1;
+    const nextLevel = LEVEL_DEFS[nextIndex];
+    if (!nextLevel) return;
+    if (nextLevel.phase !== activePhase) {
+      setActiveTab('games');
+      return;
+    }
+    setSelectedLevelIdx(nextIndex);
+  };
+
   const getDirArrowSymbol = (dir: RobotState['dir']) => {
     if (dir === 'N') return '▲';
     if (dir === 'E') return '►';
@@ -1023,6 +1056,7 @@ export default function LogicArena() {
   };
 
   const startQuiz = () => {
+    if (!phaseMastered) return;
     setQuizIdx(0);
     setQuizAnswers({});
     setQuizScore(0);
@@ -1040,40 +1074,36 @@ export default function LogicArena() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans p-4 space-y-4">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#164e3f_0,#082f32_38%,#071a2d_100%)] text-slate-900 font-sans p-3 md:p-5 space-y-4">
       {/* Top Bar Banner Header */}
-      <div className="bg-white border border-slate-300 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="overflow-hidden rounded-[1.75rem] border border-emerald-300/25 bg-slate-950/75 px-6 py-5 text-white shadow-2xl backdrop-blur flex flex-col md:flex-row justify-between items-center gap-4">
         <div className="flex items-center space-x-3.5">
-          <BookOpen className="h-6 w-6 text-[#0B2545]" />
+          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 shadow-lg"><BookOpen className="h-7 w-7 text-slate-950" /></div>
           <div>
-            <h1 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-              <span>Game #{activeLevel.id}</span>
-              <span className="text-xs text-slate-400 font-semibold lowercase">({activeLevel.name})</span>
+            <p className="text-[10px] font-black uppercase tracking-[.25em] text-emerald-300">Puzzle Temple · {activePhaseInfo.name}</p>
+            <h1 className="text-xl font-black text-white uppercase tracking-tight flex flex-wrap items-center gap-2">
+              <span>Chamber {activeLevel.id}: {activeLevel.name}</span>
             </h1>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
-              CIST CodeQuest Logic Pathway
-            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-300">Master {activePhaseInfo.concept} to restore the temple core.</p>
           </div>
         </div>
 
         {/* Level Progression Progress Bar */}
         <div className="flex-1 max-w-md mx-6 hidden md:block">
           <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
-            <span>Overall Progress</span>
+            <span className="text-slate-300">Temple restoration</span>
             <span>{completedLevels.length} / 21 Levels Cleared</span>
           </div>
-          <div className="h-2.5 w-full bg-slate-100 border border-slate-300">
+          <div className="h-3 w-full overflow-hidden rounded-full border border-white/10 bg-slate-800">
             <div
-              className="h-full bg-[#22c55e] transition-all duration-300"
+              className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-amber-300 transition-all duration-500"
               style={{ width: `${(completedLevels.length / 21) * 100}%` }}
             ></div>
           </div>
         </div>
 
         <div className="flex items-center space-x-3">
-          <span className="text-sm font-black text-[#0B2545] uppercase tracking-wider">
-            Level {activeLevel.id}
-          </span>
+          <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-center"><span className="block text-[9px] font-black uppercase text-amber-200">Temple stars</span><b className="text-lg text-white">{totalStars} / 63</b></div>
           <div className="flex space-x-1">
             {[1, 2, 3, 4, 5].map(num => {
               const unlocked = unlockedPhases.includes(num);
@@ -1083,10 +1113,10 @@ export default function LogicArena() {
                   key={num}
                   onClick={() => handlePhaseChange(num)}
                   disabled={!unlocked}
-                  className={`px-3 py-1 border text-[10px] font-bold tracking-wider uppercase transition ${
-                    active ? 'bg-[#0B2545] text-white border-[#0B2545]' :
-                    unlocked ? 'bg-white border-slate-350 text-slate-700 hover:bg-slate-50' :
-                    'bg-slate-100 border-slate-200 text-slate-450 cursor-not-allowed'
+                  className={`rounded-xl px-3 py-2 border text-[10px] font-bold tracking-wider uppercase transition ${
+                    active ? 'bg-emerald-500 text-white border-emerald-400 shadow-lg' :
+                    unlocked ? 'bg-white/10 border-white/15 text-white hover:bg-white/20' :
+                    'bg-slate-900 border-slate-700 text-slate-600 cursor-not-allowed'
                   }`}
                 >
                   P{num}
@@ -1098,21 +1128,26 @@ export default function LogicArena() {
       </div>
 
       {alertMsg && (
-        <div className="bg-emerald-500 text-white font-bold text-xs p-4 flex items-center space-x-3 shadow-md animate-bounce">
+        <div className="rounded-2xl bg-emerald-500 text-white font-bold text-xs p-4 flex items-center space-x-3 shadow-md animate-bounce">
           <Award className="h-5 w-5 text-white" />
           <span>{alertMsg}</span>
         </div>
       )}
 
+      {hasWon && activeTab === 'games' && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-amber-300/40 bg-gradient-to-r from-amber-400 to-orange-500 p-4 text-slate-950 shadow-xl sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl bg-white/40"><Award className="h-6 w-6" /></div><div><b className="block text-base font-black">Chamber restored!</b><span className="text-xs font-semibold">Your algorithm collected every knowledge crystal.</span></div></div>
+          {selectedLevelIdx + 1 < LEVEL_DEFS.length && LEVEL_DEFS[selectedLevelIdx + 1].phase === activePhase && <button onClick={goToNextChamber} className="rounded-xl bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-wider text-white">Next chamber</button>}
+        </div>
+      )}
+
       {/* Main Grid & Editor Splitter */}
-      <div className="grid gap-4 lg:grid-cols-12 items-stretch">
+      <div className="flex flex-col gap-4">
         
         {/* LEFT COLUMN: Map Selection Drawer (3 Cols) */}
-        <div className="lg:col-span-3 bg-white border border-slate-300 p-4 space-y-4">
+        <div className="rounded-[1.5rem] border border-emerald-300/20 bg-slate-950/80 p-4 text-white shadow-xl space-y-4">
           <div className="border-b pb-2 flex justify-between items-center">
-            <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest">
-              Phase {activePhase} Levels
-            </span>
+            <div><span className="text-[10px] font-black text-emerald-300 uppercase tracking-widest">{activePhaseInfo.name}</span><p className="mt-1 text-[10px] text-slate-400">{phaseCompletedCount}/{phaseLevels.length} chambers mastered</p></div>
             <button
               onClick={() => setIsEditorMode(prev => !prev)}
               className={`px-2 py-0.5 border text-[9px] uppercase font-black tracking-wide ${
@@ -1123,23 +1158,26 @@ export default function LogicArena() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 max-h-[290px] overflow-y-auto">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             {LEVEL_DEFS
               .filter(lvl => lvl.phase === activePhase)
               .map(lvl => {
                 const isActive = activeLevel.id === lvl.id;
                 const isCleared = completedLevels.includes(lvl.id);
                 const starsCount = levelStarsMap[lvl.id] || 0;
+                const levelUnlocked = isLevelUnlocked(lvl);
 
                 return (
                   <button
                     key={lvl.id}
+                    disabled={!levelUnlocked}
                     onClick={() => {
+                      if (!levelUnlocked) return;
                       setActiveTab('games');
                       setSelectedLevelIdx(LEVEL_DEFS.findIndex(x => x.id === lvl.id));
                     }}
-                    className={`w-full text-left p-3.5 border flex items-center justify-between transition-all ${
-                      isActive ? 'bg-[#0B2545] text-white border-[#0B2545]' : 'bg-[#f8fafc] border-slate-300 hover:bg-slate-50 text-slate-750'
+                    className={`min-h-20 w-full rounded-xl text-left p-3.5 border flex items-center justify-between transition-all ${
+                      isActive ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-lg' : levelUnlocked ? 'bg-white/5 border-white/10 hover:bg-white/10 text-slate-200' : 'bg-slate-900/70 border-slate-800 text-slate-600 cursor-not-allowed'
                     }`}
                   >
                     <div>
@@ -1150,10 +1188,11 @@ export default function LogicArena() {
                       {isCleared && (
                         <div className="flex space-x-0.5">
                           {Array.from({ length: starsCount }).map((_, i) => (
-                            <StarIcon key={i} className="h-3 w-3 text-yellow-400 fill-current" />
+                            <TempleIcon key={i} name="star" className="h-4 w-4 text-yellow-400" />
                           ))}
                         </div>
                       )}
+                      {!levelUnlocked && <TempleIcon name="lock" className="h-5 w-5 text-slate-600" />}
                     </div>
                   </button>
                 );
@@ -1161,14 +1200,16 @@ export default function LogicArena() {
           </div>
 
           {/* Phase Quiz Test Button */}
-          <div className="pt-2 border-t border-slate-200">
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800">
+            <p className="hidden text-xs font-semibold text-slate-400 md:block">Complete every chamber, then prove your knowledge in the Guardian Trial.</p>
             <button
               onClick={startQuiz}
-              className={`w-full py-3.5 border border-dashed text-center font-black uppercase text-xs tracking-wider transition ${
-                activeTab === 'test' ? 'bg-[#ef4444] text-white border-[#ef4444]' : 'bg-[#f8fafc] border-slate-350 text-slate-750 hover:bg-slate-50'
+              disabled={!phaseMastered}
+              className={`shrink-0 rounded-xl px-6 py-3.5 border text-center font-black uppercase text-xs tracking-wider transition ${
+                activeTab === 'test' ? 'bg-amber-400 text-slate-950 border-amber-300' : phaseMastered ? 'bg-amber-400 border-amber-300 text-slate-950 hover:bg-amber-300' : 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed'
               }`}
             >
-              Take Phase {activePhase} Test
+              {phaseMastered ? `Enter Phase ${activePhase} Trial` : `Master all ${phaseLevels.length} chambers first`}
             </button>
           </div>
 
@@ -1241,24 +1282,33 @@ export default function LogicArena() {
         </div>
 
         {/* RIGHT COLUMN: RoboZZle Interactive Board (9 Cols) */}
-        <div className="lg:col-span-9 flex flex-col gap-4">
+        <div className="flex flex-col gap-4">
           
           {activeTab === 'games' && (
-            <div className="bg-white border border-slate-300 p-6 flex flex-col gap-6">
+            <div className="grid items-start gap-5 rounded-[1.5rem] border border-emerald-300/20 bg-slate-100 p-4 shadow-2xl lg:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
+              <div className={`rounded-2xl bg-gradient-to-r ${activePhaseInfo.color} p-[1px] lg:col-span-2`}>
+                <div className="flex flex-col gap-3 rounded-2xl bg-slate-950/90 p-4 text-white sm:flex-row sm:items-center sm:justify-between">
+                  <div><span className="text-[9px] font-black uppercase tracking-[.22em] text-emerald-300">Learning objective</span><p className="mt-1 text-sm font-bold">{activeLevel.desc}</p></div>
+                  <div className="flex shrink-0 gap-2 text-center"><div className="rounded-xl bg-white/10 px-3 py-2"><b className="block text-lg text-amber-300">{activeLevel.stars.length}</b><span className="text-[8px] uppercase text-slate-400">Targets</span></div><div className="rounded-xl bg-white/10 px-3 py-2"><b className="block text-lg text-cyan-300">{activeLevel.minCmdsFor3Stars}</b><span className="text-[8px] uppercase text-slate-400">3-star budget</span></div></div>
+                </div>
+              </div>
               
               {/* PLAY GRID VIEWPORT */}
-              <div className="flex flex-col items-center justify-center p-4 bg-[#f1f5f9] border border-slate-300">
+              <div className="relative flex min-h-[520px] flex-col items-center justify-center overflow-hidden rounded-[1.5rem] border border-amber-300/25 bg-[radial-gradient(circle_at_center,#155e75_0,#0f3b46_42%,#071a2d_100%)] p-5 shadow-inner lg:row-span-3">
+                <div className="pointer-events-none absolute inset-5 rounded-[1.25rem] border border-amber-200/10" />
+                <div className="pointer-events-none absolute left-[8%] top-[18%] h-24 w-24 rounded-full bg-cyan-300/10 blur-3xl" /><div className="pointer-events-none absolute bottom-[12%] right-[5%] h-32 w-32 rounded-full bg-amber-300/10 blur-3xl" />
+                <div className="mb-5 flex w-full max-w-[760px] items-center justify-between text-white"><div><span className="text-[9px] font-black uppercase tracking-[.2em] text-amber-300">Temple chamber</span><b className="block text-lg">Guide the light core to every crystal</b></div><span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-black">{displayedStarsLeft} crystal{displayedStarsLeft === 1 ? '' : 's'} left</span></div>
                 <div
-                  className="grid bg-white p-2 border border-slate-450"
+                  className="relative z-10 grid max-w-full overflow-auto rounded-[1.5rem] border-4 border-amber-300/40 bg-slate-950/80 p-3 shadow-2xl"
                   style={{
-                    gridTemplateColumns: `repeat(${activeLevel.cols}, minmax(0, 1fr))`,
-                    gap: '1px',
-                    width: activeLevel.id === 19 ? '380px' : '330px',
-                    height: activeLevel.id === 19 ? '380px' : '330px'
+                    gridTemplateColumns: `repeat(${visibleCols.length}, minmax(34px, 54px))`,
+                    gap: '4px'
                   }}
                 >
-                  {gridState.map((row, r) =>
-                    row.map((cell, c) => {
+                  {visibleRows.map((r) =>
+                    visibleCols.map((c) => {
+                      const cell = gridState[r]?.[c];
+                      if (!cell) return null;
                       const isRobot = isPlaying ? (runtimeRobot.r === r && runtimeRobot.c === c) : (robot.r === r && robot.c === c);
                       const currentRobot = isPlaying ? runtimeRobot : robot;
                       const hasStar = cell.hasStar;
@@ -1267,21 +1317,21 @@ export default function LogicArena() {
                         <div
                           key={`${r}-${c}`}
                           onClick={() => handleEditorCellClick(r, c)}
-                          className={`relative aspect-square border-[0.5px] border-slate-200 flex items-center justify-center transition-all ${isEditorMode ? 'cursor-crosshair hover:opacity-85' : ''} ${
-                            cell.color === 'gray' ? 'bg-[#e2e8f0]' :
+                          className={`relative aspect-square min-h-[34px] rounded-lg flex items-center justify-center transition-all ${isEditorMode ? 'cursor-crosshair hover:opacity-85' : ''} ${
+                            cell.color === 'gray' ? 'bg-slate-800/55 opacity-35' :
                             cell.color === 'red' ? 'bg-[#ef4444]' :
                             cell.color === 'blue' ? 'bg-[#3b82f6]' :
                             cell.color === 'green' ? 'bg-[#22c55e]' :
-                            'bg-white'
+                            'bg-amber-50 shadow-[inset_0_0_0_2px_rgba(251,191,36,.22),0_4px_12px_rgba(0,0,0,.25)]'
                           }`}
                         >
                           {isRobot && (
-                            <span className="font-extrabold text-black text-sm select-none transform transition-transform">
+                            <span className="grid h-[85%] w-[85%] place-items-center rounded-full bg-cyan-300 font-extrabold text-slate-950 text-sm select-none shadow-[0_0_16px_rgba(34,211,238,.9)] transform transition-transform">
                               {getDirArrowSymbol(currentRobot.dir)}
                             </span>
                           )}
                           {!isRobot && hasStar && (
-                            <StarIcon className="h-4.5 w-4.5 text-yellow-400 fill-current drop-shadow animate-pulse" />
+                            <TempleIcon name="star" className="h-7 w-7 text-yellow-400 drop-shadow animate-pulse" />
                           )}
                         </div>
                       );
@@ -1291,10 +1341,10 @@ export default function LogicArena() {
               </div>
 
               {/* EXECUTION HISTORY (Bottom Left) */}
-              <div className="border border-slate-300 bg-white p-3 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="rounded-2xl border border-slate-700 bg-slate-950 p-4 text-white flex flex-col justify-between gap-4">
                 <div className="flex-1 w-full overflow-hidden">
                   <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-                    Execution History
+                    Live execution trail
                   </span>
                   
                   <div className="flex gap-1 overflow-x-auto whitespace-nowrap py-1">
@@ -1326,79 +1376,81 @@ export default function LogicArena() {
                 </div>
 
                 {/* BOTTOM RIGHT CONTROLS */}
-                <div className="flex gap-1.5 shrink-0 bg-slate-550/15 p-1 border">
+                <div className="grid grid-cols-5 gap-2 rounded-xl bg-white/5 p-2">
                   <button
                     onClick={handlePlay}
                     disabled={isPlaying && !isPaused}
-                    className="p-3 bg-[#3b82f6] hover:bg-blue-600 text-white font-extrabold text-xs shadow transition active:scale-95 disabled:opacity-50"
+                    className="rounded-xl p-3 bg-emerald-500 hover:bg-emerald-400 text-white font-extrabold text-xs shadow transition active:scale-95 disabled:opacity-30"
                     title="Play"
                   >
-                    <Play className="h-4 w-4 fill-current" />
+                    <TempleIcon name="play" className="h-6 w-6" />
                   </button>
                   <button
                     onClick={() => setIsPaused(prev => !prev)}
                     disabled={!isPlaying}
-                    className="p-3 bg-[#3b82f6] hover:bg-blue-600 text-white font-extrabold text-xs shadow transition active:scale-95 disabled:opacity-50"
+                    className="rounded-xl p-3 bg-sky-500 hover:bg-sky-400 text-white font-extrabold text-xs shadow transition active:scale-95 disabled:opacity-30"
                     title="Pause"
                   >
-                    <Pause className="h-4 w-4 fill-current" />
+                    <TempleIcon name="pause" className="h-6 w-6" />
                   </button>
                   <button
                     onClick={handleStep}
-                    className="p-3 bg-[#3b82f6] hover:bg-blue-600 text-white font-extrabold text-xs shadow transition active:scale-95"
+                    className="rounded-xl p-3 bg-violet-500 hover:bg-violet-400 text-white font-extrabold text-xs shadow transition active:scale-95"
                     title="Step Forward"
                   >
-                    <StepIcon className="h-4 w-4 fill-current" />
+                    <TempleIcon name="step" className="h-6 w-6" />
                   </button>
                   <button
                     onClick={handleReset}
-                    className="p-3 bg-[#3b82f6] hover:bg-blue-600 text-white font-extrabold text-xs shadow transition active:scale-95"
+                    className="rounded-xl p-3 bg-rose-500 hover:bg-rose-400 text-white font-extrabold text-xs shadow transition active:scale-95"
                     title="Restart"
                   >
-                    <ResetIcon className="h-4 w-4 fill-current" />
+                    <TempleIcon name="reset" className="h-6 w-6" />
                   </button>
                   <button
                     onClick={() => {
                       const next = executionSpeed === 350 ? 120 : executionSpeed === 120 ? 600 : 350;
                       setExecutionSpeed(next);
                     }}
-                    className="p-3 bg-[#3b82f6] hover:bg-blue-600 text-white font-extrabold text-xs shadow transition active:scale-95"
+                    className="rounded-xl p-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow transition active:scale-95"
                     title={`Speed: ${executionSpeed === 600 ? 'Slow' : executionSpeed === 120 ? 'Fast' : 'Normal'}`}
                   >
-                    <SpeedIcon className="h-4 w-4 fill-current" />
+                    <TempleIcon name="speed" className="h-6 w-6" />
                   </button>
                 </div>
               </div>
 
               {/* EDITOR GRID & FUNCTION SLOTS */}
-              <div className="grid gap-6 md:grid-cols-12 items-start">
+              <div className="grid gap-4 items-start">
                 
                 {/* BOTTOM CENTER: Commands, Conditions, Brushes (5 Cols) */}
-                <div className="md:col-span-5 bg-[#f8fafc] border border-slate-350 p-4 space-y-4">
+                <div className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm space-y-4">
                   
                   {/* Commands */}
                   <div>
-                    <span className="block text-[9.5px] uppercase font-black tracking-wider text-slate-450 mb-1.5">Commands</span>
-                    <div className="flex flex-wrap gap-1">
+                    <span className="block text-[10px] uppercase font-black tracking-[.18em] text-emerald-700 mb-2">Command stones</span>
+                    <div className="flex flex-wrap gap-2">
                       {[
-                        { name: 'up', symbol: '↑' },
-                        { name: 'ccw', symbol: '↺' },
-                        { name: 'cw', symbol: '↻' },
-                        { name: 'f1', symbol: 'F1' },
-                        { name: 'f2', symbol: 'F2' }
+                        { name: 'up', icon: 'forward' as const, label: 'Move forward' },
+                        { name: 'ccw', icon: 'turn-left' as const, label: 'Turn left' },
+                        { name: 'cw', icon: 'turn-right' as const, label: 'Turn right' },
+                        { name: 'f1', icon: 'f1' as const, label: 'Call function one' },
+                        { name: 'f2', icon: 'f2' as const, label: 'Call function two' }
                       ].map(cmd => {
                         const isSelected = selectedPaletteItem?.type === 'cmd' && selectedPaletteItem?.name === cmd.name;
                         return (
                           <button
                             key={cmd.name}
                             draggable="true"
+                            aria-label={cmd.label}
+                            title={cmd.label}
                             onDragStart={(e) => handleDragStart(e, 'cmd', cmd.name)}
                             onClick={() => setSelectedPaletteItem({ type: 'cmd', name: cmd.name })}
-                            className={`h-9 w-9 border text-xs font-black uppercase flex items-center justify-center transition ${
-                              isSelected ? 'bg-[#0B2545] text-white border-[#0B2545]' : 'bg-white border-slate-350 hover:bg-slate-50 text-slate-700 shadow-sm'
+                            className={`h-12 min-w-12 rounded-xl border-2 px-3 text-sm font-black uppercase flex items-center justify-center transition active:scale-95 ${
+                              isSelected ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg' : 'bg-slate-50 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-800 shadow-sm'
                             }`}
                           >
-                            {cmd.symbol}
+                            <TempleIcon name={cmd.icon} className="h-7 w-7" />
                           </button>
                         );
                       })}
@@ -1407,7 +1459,7 @@ export default function LogicArena() {
 
                   {/* Conditions */}
                   <div>
-                    <span className="block text-[9.5px] uppercase font-black tracking-wider text-slate-450 mb-1.5">Conditions</span>
+                    <span className="block text-[10px] uppercase font-black tracking-[.18em] text-sky-700 mb-2">If tile is...</span>
                     <div className="flex gap-1.5">
                       <button
                         draggable="true"
@@ -1433,7 +1485,7 @@ export default function LogicArena() {
                             draggable="true"
                             onDragStart={(e) => handleDragStart(e, 'cond', cond.name)}
                             onClick={() => setSelectedPaletteItem({ type: 'cond', name: cond.name })}
-                            className={`h-8 w-8 border flex items-center justify-center transition ${cond.color} ${
+                            className={`h-10 w-10 rounded-xl border-2 flex items-center justify-center transition ${cond.color} ${
                               isSelected ? 'ring-2 ring-[#0B2545] border-white' : 'border-slate-350'
                             }`}
                           />
@@ -1444,7 +1496,7 @@ export default function LogicArena() {
 
                   {/* Brushes */}
                   <div>
-                    <span className="block text-[9.5px] uppercase font-black tracking-wider text-slate-450 mb-1.5">Brushes</span>
+                    <span className="block text-[10px] uppercase font-black tracking-[.18em] text-violet-700 mb-2">Magic paint</span>
                     <div className="flex gap-1.5">
                       {[
                         { name: 'red', color: 'bg-[#ef4444]' },
@@ -1458,7 +1510,7 @@ export default function LogicArena() {
                             draggable="true"
                             onDragStart={(e) => handleDragStart(e, 'brush', brush.name)}
                             onClick={() => setSelectedPaletteItem({ type: 'brush', name: brush.name })}
-                            className={`h-8 w-8 border flex items-center justify-center transition relative ${brush.color} ${
+                            className={`h-10 w-10 rounded-xl border-2 flex items-center justify-center transition relative ${brush.color} ${
                               isSelected ? 'ring-2 ring-[#0B2545] border-white' : 'border-slate-350'
                             }`}
                           >
@@ -1512,12 +1564,12 @@ export default function LogicArena() {
                 </div>
 
                 {/* FUNCTIONS AREA: F1 and F2 horizontal blocks (7 Cols) */}
-                <div className="md:col-span-7 bg-[#f8fafc] border border-slate-350 p-4 space-y-4">
-                  <span className="block text-[10px] font-black text-slate-450 uppercase tracking-widest mb-1.5">Functions</span>
+                <div className="rounded-2xl border border-violet-200 bg-white p-4 shadow-sm space-y-4">
+                  <span className="block text-[10px] font-black text-violet-700 uppercase tracking-[.18em] mb-1.5">Program altar · Build reusable spells</span>
                   
                   {/* F1 Block */}
-                  <div className="flex items-center space-x-3 bg-white p-2.5 border">
-                    <div className="h-8 w-8 bg-[#0B2545] text-white font-black text-xs uppercase flex items-center justify-center shrink-0">
+                  <div className="flex items-center space-x-3 rounded-xl bg-violet-50 p-3 border-2 border-violet-100">
+                    <div className="h-11 w-11 rounded-xl bg-violet-600 text-white font-black text-xs uppercase flex items-center justify-center shrink-0 shadow-md">
                       f1
                     </div>
                     <div className="flex-1 flex gap-1 overflow-x-auto whitespace-nowrap">
@@ -1527,8 +1579,8 @@ export default function LogicArena() {
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={(e) => handleDropOnSlot(e, 'f1', index)}
                           onClick={() => handleSlotClick('f1', index)}
-                          className={`relative h-10 w-10 border flex items-center justify-center cursor-pointer transition ${
-                            slot.cmd ? 'bg-slate-100 border-slate-450' : 'bg-white border-dashed border-slate-350 hover:border-slate-450'
+                          className={`relative h-12 w-12 rounded-xl border-2 flex items-center justify-center cursor-pointer transition ${
+                            slot.cmd ? 'bg-white border-violet-400 shadow-sm' : 'bg-white/70 border-dashed border-violet-200 hover:border-violet-400'
                           }`}
                         >
                           {/* Color marker condition badge */}
@@ -1549,8 +1601,8 @@ export default function LogicArena() {
 
                   {/* F2 Block */}
                   {activeLevel.maxF2Slots > 0 && (
-                    <div className="flex items-center space-x-3 bg-white p-2.5 border pt-2 border-t">
-                      <div className="h-8 w-8 bg-[#0B2545] text-white font-black text-xs uppercase flex items-center justify-center shrink-0">
+                    <div className="flex items-center space-x-3 rounded-xl bg-sky-50 p-3 border-2 border-sky-100">
+                      <div className="h-11 w-11 rounded-xl bg-sky-600 text-white font-black text-xs uppercase flex items-center justify-center shrink-0 shadow-md">
                         f2
                       </div>
                       <div className="flex-1 flex gap-1 overflow-x-auto whitespace-nowrap">
@@ -1560,8 +1612,8 @@ export default function LogicArena() {
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={(e) => handleDropOnSlot(e, 'f2', index)}
                             onClick={() => handleSlotClick('f2', index)}
-                            className={`relative h-10 w-10 border flex items-center justify-center cursor-pointer transition ${
-                              slot.cmd ? 'bg-slate-100 border-slate-450' : 'bg-white border-dashed border-slate-350 hover:border-slate-450'
+                            className={`relative h-12 w-12 rounded-xl border-2 flex items-center justify-center cursor-pointer transition ${
+                              slot.cmd ? 'bg-white border-sky-400 shadow-sm' : 'bg-white/70 border-dashed border-sky-200 hover:border-sky-400'
                             }`}
                           >
                             {/* Color marker condition badge */}
@@ -1585,7 +1637,7 @@ export default function LogicArena() {
               </div>
 
               {/* Console Logs */}
-              <div className="bg-black p-4 rounded-none border font-mono text-[10.5px] text-slate-300 h-28 overflow-y-auto">
+              <div className="h-32 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 font-mono text-[10.5px] text-slate-300 shadow-inner">
                 <span className="block text-gray-500 font-bold uppercase text-[9px] border-b border-navy-light/10 pb-1 mb-1">Execution output</span>
                 {terminalLogs.map((log, idx) => {
                   const isSuccess = log.startsWith('🎉') || log.startsWith('✨');
@@ -1603,7 +1655,7 @@ export default function LogicArena() {
 
           {/* TAB 2: ACTIVE PHASE TEST ASSESSMENTS */}
           {activeTab === 'test' && (
-            <div className="bg-white border border-slate-300 p-6 space-y-6 max-w-2xl mx-auto">
+            <div className="mx-auto max-w-3xl space-y-6 rounded-[1.75rem] border border-amber-300/30 bg-white p-6 shadow-2xl md:p-8">
               <div className="flex justify-between items-center border-b pb-4">
                 <div>
                   <h3 className="text-lg font-black uppercase text-slate-800">
@@ -1630,7 +1682,7 @@ export default function LogicArena() {
                   </div>
 
                   {/* Question Prompt */}
-                  <div className="p-5 bg-slate-50 border border-slate-200 rounded-none font-semibold text-sm text-slate-850 leading-relaxed">
+                  <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-6 text-base font-bold leading-relaxed text-slate-850">
                     {PHASE_QUIZZES[activePhase][quizIdx].q}
                   </div>
 
@@ -1642,10 +1694,10 @@ export default function LogicArena() {
                         <button
                           key={oIdx}
                           onClick={() => handleSelectQuizOption(oIdx)}
-                          className={`w-full text-left p-4 rounded-none text-xs font-bold border transition-all ${
+                          className={`w-full rounded-2xl text-left p-4 text-xs font-bold border-2 transition-all ${
                             isSelected
-                              ? 'bg-[#0B2545] border-[#0B2545] text-white shadow-md'
-                              : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                              ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg -translate-y-0.5'
+                              : 'bg-white border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 text-slate-700'
                           }`}
                         >
                           {opt}
@@ -1658,7 +1710,7 @@ export default function LogicArena() {
                     <button
                       onClick={submitQuizAnswer}
                       disabled={quizAnswers[quizIdx] === undefined}
-                      className="px-6 py-3 bg-[#0B2545] hover:bg-maple-red text-white text-xs font-black uppercase tracking-wider rounded-none shadow-md transition disabled:opacity-50"
+                      className="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg transition hover:-translate-y-0.5 disabled:opacity-50"
                     >
                       <span>{quizIdx + 1 === PHASE_QUIZZES[activePhase].length ? 'Finish Quiz' : 'Next Question'}</span>
                     </button>
@@ -1882,13 +1934,13 @@ const createEmptyGrid = (rows: number, cols: number, color: Cell['color'] = 'gra
 };
 
 const getCmdSymbol = (cmd: CommandSlot['cmd']) => {
-  if (cmd === 'up') return '↑';
-  if (cmd === 'ccw') return '↺';
-  if (cmd === 'cw') return '↻';
-  if (cmd === 'f1') return 'F1';
-  if (cmd === 'f2') return 'F2';
-  if (cmd === 'paint_red') return '🎨R';
-  if (cmd === 'paint_green') return '🎨G';
-  if (cmd === 'paint_blue') return '🎨B';
-  return '';
+  if (cmd === 'up') return <TempleIcon name="forward" className="h-6 w-6" />;
+  if (cmd === 'ccw') return <TempleIcon name="turn-left" className="h-6 w-6" />;
+  if (cmd === 'cw') return <TempleIcon name="turn-right" className="h-6 w-6" />;
+  if (cmd === 'f1') return <TempleIcon name="f1" className="h-6 w-6" />;
+  if (cmd === 'f2') return <TempleIcon name="f2" className="h-6 w-6" />;
+  if (cmd === 'paint_red') return <TempleIcon name="paint-red" className="h-6 w-6" />;
+  if (cmd === 'paint_green') return <TempleIcon name="paint-green" className="h-6 w-6" />;
+  if (cmd === 'paint_blue') return <TempleIcon name="paint-blue" className="h-6 w-6" />;
+  return null;
 };

@@ -38,7 +38,8 @@ export default function ProjectsShowcasePage() {
   }
 
   useEffect(() => {
-    loadProjects();
+    const timer = window.setTimeout(() => void loadProjects(), 0);
+    return () => window.clearTimeout(timer);
   }, [student]);
 
   const handleVote = async (projectId: string) => {

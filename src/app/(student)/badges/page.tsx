@@ -6,6 +6,8 @@ import { useApp } from '@/context/AppContext';
 import { dbService } from '@/lib/db';
 import { Award, Lock, Target, CheckCircle2 } from 'lucide-react';
 import { BadgeIcon } from '@/components/ui/BadgeIcon';
+import { BADGE_REQUIREMENTS } from '@/lib/db/badge-requirements';
+import { evaluateTrustedBadges } from '@/lib/progression-client';
 
 // CodeQuest rank color themes
 const rankThemes: Record<string, {
@@ -120,6 +122,16 @@ export default function BadgesPage() {
         setAllBadges(sorted);
         
         if (student) {
+          // The caller cannot select the student, badge, or eligibility data.
+          // The authenticated database service derives all of it before this read.
+          try {
+            await evaluateTrustedBadges();
+          } catch (evaluationError) {
+            const message = evaluationError instanceof Error
+              ? evaluationError.message
+              : 'Unable to evaluate trusted badge progress.';
+            console.warn(`Trusted badge evaluation was skipped: ${message}`);
+          }
           const earned = await dbService.getStudentBadges(student.id);
           setEarnedBadges(earned);
         } else {
@@ -267,11 +279,11 @@ export default function BadgesPage() {
                   <span className="flex items-center space-x-1.5">
                     <Target className="h-3.5 w-3.5 text-slate-500" />
                     <span>
-                      {badge.requirement_type === 'xp' ? `Earn >= ${badge.requirement_value} XP` :
+                      {BADGE_REQUIREMENTS[badge.name]?.label ?? (badge.requirement_type === 'xp' ? `Earn >= ${badge.requirement_value} XP` :
                        badge.requirement_type === 'mission' ? 'Complete path mission' :
                        badge.requirement_type === 'challenge' ? `Solve ${badge.requirement_value} challenges` :
                        badge.requirement_type === 'project' ? 'Approve showcase project' :
-                       'Manual award'}
+                       'Manual award')}
                     </span>
                   </span>
                   
